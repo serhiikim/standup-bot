@@ -1,0 +1,33 @@
+{
+    "name": "slack-standup-bot",
+    "version": "1.0.0",
+    "description": "AI-powered Slack standup bot with intelligent response analysis",
+    "main": "app.js",
+    "scripts": {
+      "start": "node app.js",
+      "dev": "nodemon app.js",
+      "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+      "slack",
+      "bot",
+      "standup",
+      "ai",
+      "productivity"
+    ],
+    "author": "Your Name",
+    "license": "MIT",
+    "dependencies": {
+      "@slack/bolt": "^3.17.1",
+      "mongodb": "^6.3.0",
+      "node-cron": "^3.0.3",
+      "openai": "^4.24.7",
+      "dotenv": "^16.3.1"
+    },
+    "devDependencies": {
+      "nodemon": "^3.0.2"
+    },
+    "engines": {
+      "node": ">=18.0.0"
+    }
+  }
