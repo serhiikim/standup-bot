@@ -56,7 +56,8 @@ class Channel {
     channel.updatedAt = new Date();
     
     const result = await this.getCollection().insertOne(channel);
-    return { ...channel, _id: result.insertedId };
+    channel._id = result.insertedId;
+    return channel;
   }
 
   static async findByChannelId(teamId, channelId) {

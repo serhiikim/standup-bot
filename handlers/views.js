@@ -72,13 +72,18 @@ function register(app) {
         `• Participants: ${formData.participants.length > 0 ? `${formData.participants.length} specific users` : 'All channel members'}`
       );
 
-      // Post confirmation in channel
-      await slackService.postMessage(channelId,
-        `✅ Standup configuration ${formData.isUpdate ? 'updated' : 'created'} by ${slackService.formatUserMention(userId)}!\n\n` +
-        `🕒 Standups will run at *${formData.time}* (${formData.timezone}) on *${formData.daysText}*\n` +
-        `❓ ${formData.questions.length} questions configured\n` +
-        `👥 ${formData.participants.length > 0 ? `${formData.participants.length} specific participants` : 'All channel members can participate'}`
-      );
+      // Post confirmation in channel (only if bot is in channel)
+      try {
+        await slackService.postMessage(channelId,
+          `✅ Standup configuration ${formData.isUpdate ? 'updated' : 'created'} by ${slackService.formatUserMention(userId)}!\n\n` +
+          `🕒 Standups will run at *${formData.time}* (${formData.timezone}) on *${formData.daysText}*\n` +
+          `❓ ${formData.questions.length} questions configured\n` +
+          `👥 ${formData.participants.length > 0 ? `${formData.participants.length} specific participants` : 'All channel members can participate'}`
+        );
+      } catch (channelError) {
+        // If bot can't post to channel, just skip this step
+        console.log('Could not post to channel (bot not in channel):', channelError.data?.error);
+      }
 
     } catch (error) {
       console.error('Error saving standup configuration:', error);
@@ -192,13 +197,11 @@ async function saveChannelConfiguration(teamId, channelId, userId, channelInfo, 
   // Ensure team record exists
   let team = await Team.findByTeamId(teamId);
   if (!team) {
-    // If team doesn't exist, we need basic team info
-    // This should ideally be created during OAuth installation
-    const teamInfo = await slackService.getTeamInfo();
+    // Create basic team record without API call
     team = await Team.create({
       teamId: teamId,
-      teamName: teamInfo.name,
-      teamDomain: teamInfo.domain,
+      teamName: `Team-${teamId}`, // Placeholder name
+      teamDomain: 'unknown',
       installedBy: userId,
       accessToken: '', // This should be set during OAuth
       isActive: true

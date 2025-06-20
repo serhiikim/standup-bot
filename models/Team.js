@@ -34,7 +34,8 @@ class Team {
     team.updatedAt = new Date();
     
     const result = await this.getCollection().insertOne(team);
-    return { ...team, _id: result.insertedId };
+    team._id = result.insertedId;
+    return team;
   }
 
   static async findByTeamId(teamId) {

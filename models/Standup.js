@@ -62,7 +62,8 @@ class Standup {
     standup.stats.totalExpected = standup.expectedParticipants.length;
     
     const result = await this.getCollection().insertOne(standup);
-    return { ...standup, _id: result.insertedId };
+    standup._id = result.insertedId;
+    return standup;
   }
 
   static async findById(id) {

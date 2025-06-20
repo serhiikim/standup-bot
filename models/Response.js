@@ -50,7 +50,8 @@ class Response {
     response.updatedAt = new Date();
     
     const result = await this.getCollection().insertOne(response);
-    return { ...response, _id: result.insertedId };
+    response._id = result.insertedId;
+    return response;
   }
 
   static async findById(id) {

@@ -1,4 +1,5 @@
 const SlackService = require('./slackService');
+const LLMService = require('./llmService');
 const Channel = require('../models/Channel');
 const Standup = require('../models/Standup');
 const Response = require('../models/Response');
@@ -13,6 +14,7 @@ class StandupService {
   constructor(app) {
     this.app = app;
     this.slackService = new SlackService(app);
+    this.llmService = new LLMService();
   }
 
   /**
@@ -57,9 +59,12 @@ class StandupService {
       };
 
       const standup = await Standup.create(standupData);
+      
+      // Convert to Standup instance to use instance methods
+      const standupInstance = new Standup(standup);
 
       // Post standup message to channel
-      const standupMessage = this.createStandupMessage(standup, participants, channel);
+      const standupMessage = this.createStandupMessage(standupInstance, participants, channel);
       const messageResult = await this.slackService.postMessage(
         channelId,
         standupMessage.text,
@@ -67,9 +72,9 @@ class StandupService {
       );
 
       // Update standup with message timestamps
-      standup.messageTs = messageResult.ts;
-      standup.threadTs = messageResult.ts; // Thread starts from this message
-      await standup.save();
+      standupInstance.messageTs = messageResult.ts;
+      standupInstance.threadTs = messageResult.ts; // Thread starts from this message
+      await standupInstance.save();
 
       // Update channel statistics
       channel.incrementStandupCount();
@@ -78,12 +83,12 @@ class StandupService {
       // Schedule reminder if enabled
       if (channel.config.enableReminders) {
         const reminderTime = new Date(Date.now() + channel.config.reminderInterval);
-        standup.setNextReminder(reminderTime);
-        await standup.save();
+        standupInstance.setNextReminder(reminderTime);
+        await standupInstance.save();
       }
 
-      console.log(`✅ Standup started successfully: ${standup._id}`);
-      return standup;
+      console.log(`✅ Standup started successfully: ${standupInstance._id}`);
+      return standupInstance;
 
     } catch (error) {
       console.error('Error starting standup:', error);
@@ -200,6 +205,16 @@ class StandupService {
             type: 'button',
             text: {
               type: 'plain_text',
+              text: '✅ Complete Standup'
+            },
+            action_id: BLOCK_IDS.SUBMIT_RESPONSE,
+            value: standup._id.toString(),
+            style: 'primary'
+          },
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
               text: '⏹️ Cancel Standup'
             },
             action_id: BLOCK_IDS.CANCEL_BUTTON,
@@ -298,6 +313,19 @@ class StandupService {
       // Get all responses
       const responses = await Response.findByStandupId(standupId);
       
+      // Generate AI summary if we have responses
+      let aiAnalysis = null;
+      if (responses.length > 0) {
+        try {
+          aiAnalysis = await this.llmService.analyzeStandupResponses(standup, responses, this.slackService);
+          standup.summary = aiAnalysis.summary;
+          console.log('🤖 AI analysis completed');
+        } catch (error) {
+          console.error('Error generating AI summary:', error);
+          // Continue without AI analysis
+        }
+      }
+      
       // Calculate final statistics
       const responseStats = await Response.getStandupStatistics(standupId);
       standup.updateStats({
@@ -307,7 +335,7 @@ class StandupService {
       });
 
       // Create completion message
-      const completionMessage = this.createCompletionMessage(standup, responses, responseStats);
+      const completionMessage = this.createCompletionMessage(standup, responses, responseStats, aiAnalysis);
       
       // Post completion message in thread
       await this.slackService.postMessage(
@@ -340,7 +368,7 @@ class StandupService {
   /**
    * Create completion/summary message
    */
-  createCompletionMessage(standup, responses, stats) {
+  createCompletionMessage(standup, responses, stats, aiAnalysis = null) {
     const responseRate = standup.getResponseRate();
     const duration = Math.floor(standup.getDuration() / (1000 * 60)); // minutes
 
@@ -406,16 +434,101 @@ class StandupService {
       });
     }
 
-    // Add note about summary (for future AI integration)
-    blocks.push({
-      type: 'context',
-      elements: [
-        {
+    // Add AI analysis if available
+    if (aiAnalysis) {
+      blocks.push({
+        type: 'divider'
+      });
+
+      // Main summary
+      if (aiAnalysis.summary) {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `🤖 *AI Summary:*\n${aiAnalysis.summary}`
+          }
+        });
+      }
+
+      // Create a fields block for structured info
+      const fields = [];
+
+      // Achievements
+      if (aiAnalysis.achievements && aiAnalysis.achievements.length > 0) {
+        const achievementsText = aiAnalysis.achievements
+          .slice(0, 3)
+          .map(a => `• ${a}`)
+          .join('\n');
+        fields.push({
           type: 'mrkdwn',
-          text: '🤖 AI summary feature coming soon!'
+          text: `*🎉 Achievements:*\n${achievementsText}`
+        });
+      }
+
+      // Blockers
+      if (aiAnalysis.blockers && aiAnalysis.blockers.length > 0) {
+        const blockersText = aiAnalysis.blockers
+          .slice(0, 3)
+          .map(b => `• ${b}`)
+          .join('\n');
+        fields.push({
+          type: 'mrkdwn',
+          text: `*🚫 Blockers:*\n${blockersText}`
+        });
+      }
+
+      // Next Steps
+      if (aiAnalysis.nextSteps && aiAnalysis.nextSteps.length > 0) {
+        const nextStepsText = aiAnalysis.nextSteps
+          .slice(0, 3)
+          .map(n => `• ${n}`)
+          .join('\n');
+        fields.push({
+          type: 'mrkdwn',
+          text: `*📋 Next Steps:*\n${nextStepsText}`
+        });
+      }
+
+      // Add fields block if we have any fields
+      if (fields.length > 0) {
+        // Split fields into pairs for better layout
+        for (let i = 0; i < fields.length; i += 2) {
+          blocks.push({
+            type: 'section',
+            fields: fields.slice(i, i + 2)
+          });
         }
-      ]
-    });
+      }
+
+      // Team mood
+      if (aiAnalysis.teamMood) {
+        const moodEmoji = {
+          'positive': '😊',
+          'neutral': '😐', 
+          'negative': '😟'
+        };
+        blocks.push({
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `Team mood: ${moodEmoji[aiAnalysis.teamMood] || '😐'} *${aiAnalysis.teamMood.charAt(0).toUpperCase() + aiAnalysis.teamMood.slice(1)}*`
+            }
+          ]
+        });
+      }
+    } else {
+      blocks.push({
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: '🤖 AI analysis unavailable - check OpenAI API key in settings'
+          }
+        ]
+      });
+    }
 
     return { text, blocks };
   }

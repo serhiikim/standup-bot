@@ -1,7 +1,7 @@
+require('dotenv').config();
 const { App } = require('@slack/bolt');
 const database = require('./config/database');
 const scheduler = require('./jobs/scheduler');
-require('dotenv').config();
 
 // Import handlers
 const commandHandlers = require('./handlers/commands');

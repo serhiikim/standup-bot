@@ -26,12 +26,23 @@ function register(app) {
       const { team_id, channel_id, user_id, trigger_id } = command;
 
       // Check if bot is in the channel
-      const channelInfo = await slackService.getChannelInfo(channel_id);
-      if (!channelInfo) {
-        return respond({
-          text: '❌ Cannot access this channel. Please invite the bot to this channel first.',
-          response_type: 'ephemeral'
-        });
+      let channelInfo;
+      try {
+        channelInfo = await slackService.getChannelInfo(channel_id);
+        if (!channelInfo) {
+          return respond({
+            text: '❌ Cannot access this channel. Please invite the bot to this channel first.\n\nType: `/invite @StandupBot`',
+            response_type: 'ephemeral'
+          });
+        }
+      } catch (error) {
+        if (error.data?.error === 'channel_not_found') {
+          return respond({
+            text: '❌ Cannot access this channel. Please invite the bot to this channel first.\n\nType: `/invite @StandupBot`',
+            response_type: 'ephemeral'
+          });
+        }
+        throw error;
       }
 
       // Get current channel configuration if exists
@@ -158,6 +169,85 @@ function register(app) {
       console.error('Error in /standup-status command:', error);
       return respond({
         text: '❌ Failed to get status. Please try again.',
+        response_type: 'ephemeral'
+      });
+    }
+  });
+
+  // Admin commands for testing
+  app.command('/standup-complete', async ({ command, ack, respond }) => {
+    await ack();
+
+    try {
+      const { team_id, channel_id, text } = command;
+
+      // Get active standup
+      const activeStandups = await Standup.findActiveByChannel(team_id, channel_id);
+      if (activeStandups.length === 0) {
+        return respond({
+          text: '❌ No active standup found in this channel.',
+          response_type: 'ephemeral'
+        });
+      }
+
+      const standup = activeStandups[0];
+      const success = await standupService.completeStandup(standup._id, 'manual_admin');
+
+      if (success) {
+        return respond({
+          text: '✅ Standup completed successfully!',
+          response_type: 'ephemeral'
+        });
+      } else {
+        return respond({
+          text: '❌ Failed to complete standup.',
+          response_type: 'ephemeral'
+        });
+      }
+
+    } catch (error) {
+      console.error('Error in /standup-complete command:', error);
+      return respond({
+        text: '❌ Failed to complete standup. Please try again.',
+        response_type: 'ephemeral'
+      });
+    }
+  });
+
+  app.command('/standup-remind', async ({ command, ack, respond }) => {
+    await ack();
+
+    try {
+      const { team_id, channel_id } = command;
+
+      // Get active standup
+      const activeStandups = await Standup.findActiveByChannel(team_id, channel_id);
+      if (activeStandups.length === 0) {
+        return respond({
+          text: '❌ No active standup found in this channel.',
+          response_type: 'ephemeral'
+        });
+      }
+
+      const standup = activeStandups[0];
+      const success = await standupService.sendReminders(standup._id);
+
+      if (success) {
+        return respond({
+          text: '📢 Reminders sent successfully!',
+          response_type: 'ephemeral'
+        });
+      } else {
+        return respond({
+          text: '❌ No reminders needed (everyone responded or no missing participants).',
+          response_type: 'ephemeral'
+        });
+      }
+
+    } catch (error) {
+      console.error('Error in /standup-remind command:', error);
+      return respond({
+        text: '❌ Failed to send reminders. Please try again.',
         response_type: 'ephemeral'
       });
     }

@@ -2,40 +2,76 @@ const OpenAI = require('openai');
 
 class LLMService {
   constructor() {
+    console.log('🔍 Checking OpenAI API key...');
+    console.log('API Key exists:', !!process.env.OPENAI_API_KEY);
+    console.log('API Key length:', process.env.OPENAI_API_KEY?.length || 0);
+    console.log('API Key starts with sk-:', process.env.OPENAI_API_KEY?.startsWith('sk-') || false);
+    
     this.openai = process.env.OPENAI_API_KEY ? new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     }) : null;
     
     this.isEnabled = !!this.openai;
+    this.model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
     
     if (!this.isEnabled) {
       console.warn('⚠️ OpenAI API key not configured - LLM features disabled');
+    } else {
+      console.log('✅ OpenAI API key configured successfully');
+      console.log('🤖 Using model:', this.model);
     }
+  }
+
+  /**
+   * Extract blockers from analysis text (fallback method)
+   */
+  extractBlockers(analysisText) {
+    const blockerKeywords = ['blocker', 'blocked', 'issue', 'problem', 'challenge', 'stuck', 'difficulty'];
+    const lines = analysisText.toLowerCase().split('\n');
+    
+    return lines.filter(line => 
+      blockerKeywords.some(keyword => line.includes(keyword))
+    ).slice(0, 3);
+  }
+
+  /**
+   * Extract achievements from analysis text (fallback method)
+   */
+  extractAchievements(analysisText) {
+    const achievementKeywords = ['completed', 'finished', 'achieved', 'delivered', 'success', 'done'];
+    const lines = analysisText.toLowerCase().split('\n');
+    
+    return lines.filter(line => 
+      achievementKeywords.some(keyword => line.includes(keyword))
+    ).slice(0, 3);
   }
 
   /**
    * Analyze standup responses and generate summary
    */
-  async analyzeStandupResponses(standup, responses) {
+  async analyzeStandupResponses(standup, responses, slackService = null) {
     if (!this.isEnabled) {
-      return this.createFallbackSummary(standup, responses);
+      return this.createFallbackSummary(standup, responses, slackService);
     }
 
     try {
-      // Prepare responses text for analysis
+      // Prepare responses text for analysis with mentions
       const responsesText = responses.map(response => {
+        const userMention = slackService ? 
+          slackService.formatUserMention(response.userId) : 
+          response.userDisplayName || response.username;
         const answers = response.responses.join('\n');
-        return `${response.userDisplayName || response.username}:\n${answers}`;
+        return `${userMention}:\n${answers}`;
       }).join('\n\n---\n\n');
 
       const prompt = this.createAnalysisPrompt(standup.questions, responsesText);
 
       const completion = await this.openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: this.model,
         messages: [
           {
             role: "system",
-            content: "You are an AI assistant that analyzes team standup responses and creates concise, helpful summaries."
+            content: "You are an AI assistant that analyzes team standup responses and creates concise, helpful summaries. When you see user mentions like <@U123>, preserve them in your response."
           },
           {
             role: "user",
@@ -48,18 +84,23 @@ class LLMService {
 
       const analysis = completion.choices[0].message.content;
       
+      // Parse the structured response
+      const parsedAnalysis = this.parseStructuredAnalysis(analysis);
+      
       return {
-        summary: analysis,
-        blockers: this.extractBlockers(analysis),
-        achievements: this.extractAchievements(analysis),
-        teamMood: this.assessTeamMood(analysis),
+        summary: parsedAnalysis.summary,
+        blockers: parsedAnalysis.blockers,
+        achievements: parsedAnalysis.achievements,
+        nextSteps: parsedAnalysis.nextSteps,
+        teamMood: parsedAnalysis.teamMood,
+        rawAnalysis: analysis,
         generatedBy: 'openai',
         generatedAt: new Date()
       };
 
     } catch (error) {
       console.error('Error in LLM analysis:', error);
-      return this.createFallbackSummary(standup, responses);
+      return this.createFallbackSummary(standup, responses, slackService);
     }
   }
 
@@ -68,7 +109,7 @@ class LLMService {
    */
   createAnalysisPrompt(questions, responsesText) {
     return `
-Please analyze the following standup responses and provide a concise summary:
+Please analyze the following standup responses and provide a structured summary:
 
 STANDUP QUESTIONS:
 ${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
@@ -76,41 +117,94 @@ ${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
 TEAM RESPONSES:
 ${responsesText}
 
-Please provide:
-1. A brief overall summary (2-3 sentences)
-2. Key achievements/progress mentioned
-3. Any blockers or challenges identified
-4. Overall team mood/sentiment
-5. Any action items or follow-ups needed
+Please provide your analysis in the following format:
 
-Keep the summary professional, positive, and actionable.
+**SUMMARY:**
+[2-3 sentences summarizing the key points from all responses]
+
+**ACHIEVEMENTS:**
+[List 2-3 specific accomplishments mentioned by team members]
+
+**BLOCKERS:**
+[List any specific blockers, challenges, or issues mentioned]
+
+**NEXT STEPS:**
+[Key tasks or priorities mentioned for today/upcoming work]
+
+**TEAM MOOD:**
+[One word: positive, neutral, or negative, with brief explanation]
+
+Keep each section concise and focus on actionable insights.
 `;
   }
 
   /**
-   * Extract blockers from analysis text
+   * Parse structured analysis response from LLM
    */
-  extractBlockers(analysisText) {
-    // Simple keyword-based extraction
-    const blockerKeywords = ['blocker', 'blocked', 'issue', 'problem', 'challenge', 'stuck', 'difficulty'];
-    const lines = analysisText.toLowerCase().split('\n');
-    
-    return lines.filter(line => 
-      blockerKeywords.some(keyword => line.includes(keyword))
-    ).slice(0, 5); // Limit to 5 blockers
-  }
+  parseStructuredAnalysis(analysisText) {
+    const sections = {
+      summary: '',
+      achievements: [],
+      blockers: [],
+      nextSteps: [],
+      teamMood: 'neutral'
+    };
 
-  /**
-   * Extract achievements from analysis text
-   */
-  extractAchievements(analysisText) {
-    // Simple keyword-based extraction
-    const achievementKeywords = ['completed', 'finished', 'achieved', 'delivered', 'success', 'done'];
-    const lines = analysisText.toLowerCase().split('\n');
-    
-    return lines.filter(line => 
-      achievementKeywords.some(keyword => line.includes(keyword))
-    ).slice(0, 5); // Limit to 5 achievements
+    try {
+      const lines = analysisText.split('\n');
+      let currentSection = '';
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        
+        if (trimmedLine.includes('**SUMMARY:**')) {
+          currentSection = 'summary';
+          continue;
+        } else if (trimmedLine.includes('**ACHIEVEMENTS:**')) {
+          currentSection = 'achievements';
+          continue;
+        } else if (trimmedLine.includes('**BLOCKERS:**')) {
+          currentSection = 'blockers';
+          continue;
+        } else if (trimmedLine.includes('**NEXT STEPS:**')) {
+          currentSection = 'nextSteps';
+          continue;
+        } else if (trimmedLine.includes('**TEAM MOOD:**')) {
+          currentSection = 'teamMood';
+          continue;
+        }
+        
+        if (trimmedLine && !trimmedLine.startsWith('**')) {
+          if (currentSection === 'summary') {
+            sections.summary += (sections.summary ? ' ' : '') + trimmedLine;
+          } else if (currentSection === 'teamMood') {
+            const moodMatch = trimmedLine.toLowerCase().match(/(positive|negative|neutral)/);
+            if (moodMatch) {
+              sections.teamMood = moodMatch[1];
+            }
+          } else if (currentSection && ['achievements', 'blockers', 'nextSteps'].includes(currentSection)) {
+            // Clean bullet points
+            const cleanLine = trimmedLine.replace(/^[-•*]\s*/, '').trim();
+            if (cleanLine && cleanLine.length > 5) {
+              sections[currentSection].push(cleanLine);
+            }
+          }
+        }
+      }
+      
+      return sections;
+      
+    } catch (error) {
+      console.error('Error parsing structured analysis:', error);
+      // Fallback to original format
+      return {
+        summary: analysisText.substring(0, 200) + '...',
+        achievements: this.extractAchievements(analysisText),
+        blockers: this.extractBlockers(analysisText),
+        nextSteps: [],
+        teamMood: this.assessTeamMood(analysisText)
+      };
+    }
   }
 
   /**
@@ -132,13 +226,16 @@ Keep the summary professional, positive, and actionable.
   /**
    * Create fallback summary when LLM is not available
    */
-  createFallbackSummary(standup, responses) {
+  createFallbackSummary(standup, responses, slackService = null) {
     const responseCount = responses.length;
     const expectedCount = standup.stats.totalExpected;
     const responseRate = Math.round((responseCount / expectedCount) * 100);
     
     const participantNames = responses
-      .map(r => r.userDisplayName || r.username)
+      .map(r => slackService ? 
+        slackService.formatUserMention(r.userId) : 
+        r.userDisplayName || r.username
+      )
       .join(', ');
 
     const summary = `📊 Standup Summary (${responseCount}/${expectedCount} responses, ${responseRate}%)\n\n` +
@@ -149,6 +246,7 @@ Keep the summary professional, positive, and actionable.
       summary,
       blockers: [],
       achievements: [],
+      nextSteps: [],
       teamMood: 'neutral',
       generatedBy: 'fallback',
       generatedAt: new Date()
@@ -165,7 +263,7 @@ Keep the summary professional, positive, and actionable.
 
     try {
       const completion = await this.openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: this.model,
         messages: [
           {
             role: "system",
@@ -211,12 +309,12 @@ Keep the summary professional, positive, and actionable.
 
     try {
       const completion = await this.openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: this.model,
         messages: [{ role: "user", content: "Hello" }],
         max_tokens: 5
       });
 
-      return { success: true, model: "gpt-3.5-turbo" };
+      return { success: true, model: this.model };
 
     } catch (error) {
       return { success: false, error: error.message };

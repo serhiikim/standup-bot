@@ -102,16 +102,28 @@ function register(app) {
     await ack();
     
     try {
-      // Handle standup response submission
-      // This will be implemented when we add response handling
-      await respond({
-        text: '✅ Response submitted! (Feature coming soon!)',
-        response_type: 'ephemeral'
-      });
+      const standupId = action.value;
+      const userId = body.user.id;
+      
+      // Complete the standup using standupService
+      const success = await standupService.completeStandup(standupId, 'manual_complete');
+      
+      if (success) {
+        await respond({
+          text: '✅ Standup completed successfully! Check the thread for summary.',
+          response_type: 'ephemeral',
+          replace_original: false
+        });
+      } else {
+        await respond({
+          text: '❌ Failed to complete standup or standup already completed.',
+          response_type: 'ephemeral'
+        });
+      }
     } catch (error) {
-      console.error('Error handling response submission:', error);
+      console.error('Error handling complete button:', error);
       await respond({
-        text: '❌ Failed to submit response.',
+        text: '❌ Failed to complete standup.',
         response_type: 'ephemeral'
       });
     }
