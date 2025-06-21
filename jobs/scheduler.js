@@ -1,4 +1,3 @@
-// jobs/scheduler.js - простое исправление
 
 const cron = require('node-cron');
 const StandupService = require('../services/standupService');
@@ -14,7 +13,7 @@ class Scheduler {
   }
 
   /**
-   * Initialize with app (вызывается из app.js)
+   * Initialize with app 
    */
   setApp(app) {
     this.app = app;
