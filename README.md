@@ -16,9 +16,9 @@ AI-powered Slack standup bot with intelligent response analysis and automated sc
 
 ### Prerequisites
 
-- Node.js 18+
-- MongoDB database
+- Docker and Docker Compose
 - Slack workspace with bot permissions
+- MongoDB Atlas account (free tier available)
 - OpenAI API key (optional, for AI features)
 
 ### Installation
@@ -27,37 +27,36 @@ AI-powered Slack standup bot with intelligent response analysis and automated sc
    ```bash
    git clone <repository-url>
    cd slack-standup-bot
-   npm install
    ```
 
-2. **Set up environment variables**
+2. **Initial setup**
+   ```bash
+   ./scripts/setup.sh
+   ```
+
+3. **Configure environment**
    
-   Create a `.env` file in the root directory:
+   Edit the `.env` file:
    ```env
-   # Slack Configuration
+   # Slack Configuration (Required)
    SLACK_BOT_TOKEN=xoxb-your-bot-token
    SLACK_SIGNING_SECRET=your-signing-secret
-   SLACK_APP_TOKEN=xapp-your-app-token  # For Socket Mode
+   SLACK_APP_TOKEN=xapp-your-app-token
 
-   # MongoDB
-   MONGODB_URI=mongodb://localhost:27017/slack-standup-bot
+   # MongoDB Atlas (Required)
+   MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/slack-standup-bot
 
    # OpenAI (Optional - for AI features)
    OPENAI_API_KEY=sk-your-openai-api-key
    OPENAI_MODEL=gpt-4o-mini
-
-   # Server
-   PORT=3000
    ```
 
-3. **Start the application**
+4. **Start the bot**
    ```bash
-   # Production
-   npm start
-
-   # Development with auto-reload
-   npm run dev
+   ./scripts/start.sh
    ```
+
+That's it! 🎉
 
 ### Slack App Setup
 
@@ -101,7 +100,7 @@ AI-powered Slack standup bot with intelligent response analysis and automated sc
      - `message.groups` - Messages in private channels
      - `message.im` - Direct messages
 
-5. **Install the app** to your Slack workspace
+6. **Install the app** to your Slack workspace
 
 ## Usage
 
@@ -141,6 +140,64 @@ AI-powered Slack standup bot with intelligent response analysis and automated sc
 4. **AI Analysis** - When complete, AI analyzes all responses
 5. **Smart Summary** - Bot posts a summary with insights and next steps
 
+## Management Commands
+
+### Simple Scripts:
+```bash
+./scripts/setup.sh     # Initial setup
+./scripts/start.sh     # Start the bot
+./scripts/stop.sh      # Stop the bot
+./scripts/restart.sh   # Restart the bot
+./scripts/logs.sh      # View logs
+./scripts/health.sh    # Check bot health
+./scripts/update.sh    # Update and restart
+./scripts/clean.sh     # Clean Docker resources
+```
+
+### NPM Scripts:
+```bash
+npm run docker:setup    # Initial setup
+npm run docker:start    # Start the bot
+npm run docker:stop     # Stop the bot
+npm run docker:logs     # View logs
+npm run docker:health   # Check health
+```
+
+### Direct Docker Commands:
+```bash
+# Check status
+docker-compose ps
+
+# View bot logs
+docker-compose logs -f standup-bot
+
+# Stop the bot
+docker-compose down
+
+# Restart the bot
+docker-compose restart standup-bot
+
+# Update and restart
+git pull && docker-compose up --build -d
+```
+
+## Development
+
+For local development with a local MongoDB:
+
+```bash
+# Start development environment
+./scripts/dev.sh
+
+# Access MongoDB Express at http://localhost:8081
+# Credentials: admin / admin123
+```
+
+Make sure your `.env` uses local MongoDB for development:
+```env
+MONGODB_URI=mongodb://mongodb:27017/slack-standup-bot
+```
+
 ## Architecture
 
 ```
@@ -162,6 +219,7 @@ standup-bot/
 │   ├── llmService.js      # AI analysis service
 │   └── slackService.js    # Slack API helpers
 ├── jobs/scheduler.js       # Automated scheduling system
+├── scripts/                # Management scripts
 └── utils/constants.js      # Configuration constants
 ```
 
@@ -206,21 +264,19 @@ The bot runs a scheduler that:
 - Works without OpenAI API (basic summaries)
 - Graceful error handling
 - Manual standup management
-- Offline data persistence
+- Cloud database persistence
 
 ## Deployment
 
+### Production Setup
+- Uses MongoDB Atlas (cloud database) - no local database dependencies
+- Dockerized application for easy deployment
+- Automatic container restart on failure
+- Logs stored in `./logs/` directory
+- Stateless application - easy to scale and update
+
 ### Environment Variables
 See [Installation](#installation) section for required environment variables.
-
-### MongoDB Setup
-The bot automatically creates necessary indexes and collections on startup.
-
-### Production Considerations
-- Use Socket Mode for real-time events in production
-- Set up proper MongoDB clustering for high availability
-- Configure log rotation and monitoring
-- Use environment-specific configuration
 
 ## Troubleshooting
 
@@ -234,17 +290,23 @@ The bot automatically creates necessary indexes and collections on startup.
 **Standups not starting automatically:**
 - Check timezone configuration
 - Verify scheduler is running
-- Review MongoDB connection
+- Review MongoDB connection with `./scripts/health.sh`
 
 **AI analysis not working:**
 - Verify OpenAI API key is set
 - Check API quota and billing
 - Review model configuration
 
-### Debug Mode
-Enable detailed logging by setting:
-```env
-NODE_ENV=development
+**Database connection issues:**
+- Verify MongoDB Atlas connection string
+- Check if your IP is whitelisted in Atlas
+- Ensure database user has proper permissions
+
+### Debug Commands
+```bash
+./scripts/logs.sh      # View detailed logs
+./scripts/health.sh    # Check system health
+docker-compose ps      # Check container status
 ```
 
 ## Contributing
@@ -257,7 +319,7 @@ NODE_ENV=development
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
 ## Support
 

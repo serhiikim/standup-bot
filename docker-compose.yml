@@ -1,0 +1,70 @@
+services:
+  standup-bot:
+    build: .
+    container_name: slack-standup-bot
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
+      - MONGODB_URI=${MONGODB_URI}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - PORT=3000
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - standup-network
+
+  # Optional: MongoDB for local development only
+  mongodb:
+    image: mongo:7
+    container_name: slack-standup-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=slack-standup-bot
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - standup-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    profiles:
+      - local-dev
+
+  # Optional: MongoDB Express for database management
+  mongo-express:
+    image: mongo-express:latest
+    container_name: slack-standup-mongo-express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_BASICAUTH_USERNAME=${BASICAUTH_USERNAME}
+      - ME_CONFIG_BASICAUTH_PASSWORD=${BASICAUTH_PASSWORD}
+    depends_on:
+      - mongodb
+    networks:
+      - standup-network
+    profiles:
+      - local-dev
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  standup-network:
+    driver: bridge
