@@ -21,10 +21,16 @@ function register(app) {
   // /standup-setup command
   app.command('/standup-setup', async ({ command, ack, respond, client }) => {
     await ack();
-
+  
     try {
       const { team_id, channel_id, user_id, trigger_id } = command;
-
+  
+      // Get user info to determine timezone
+      const userInfo = await slackService.getUserInfo(user_id);
+      const userTimezone = userInfo.tz || 'UTC';
+      
+      console.log(`User ${user_id} timezone: ${userTimezone}`);
+  
       // Check if bot is in the channel
       let channelInfo;
       try {
@@ -44,18 +50,21 @@ function register(app) {
         }
         throw error;
       }
-
+  
       // Get current channel configuration if exists
       const existingChannel = await Channel.findByChannelId(team_id, channel_id);
       
-      // Create the setup modal with channel context
-      const modal = createSetupModal(channelInfo, existingChannel);
+      // Create the setup modal with channel context and user timezone
+      const modal = createSetupModal(channelInfo, existingChannel, userTimezone);
       
-      // Pass channel ID in private metadata for modal submission
-      modal.private_metadata = JSON.stringify({ channelId: channel_id });
+      // Pass channel ID and user timezone in private metadata
+      modal.private_metadata = JSON.stringify({ 
+        channelId: channel_id,
+        userTimezone: userTimezone 
+      });
       
       await slackService.openModal(trigger_id, modal);
-
+  
     } catch (error) {
       console.error('Error in /standup-setup command:', error);
       return respond({
@@ -256,199 +265,182 @@ function register(app) {
   console.log('✅ Command handlers registered');
 }
 
-function createSetupModal(channelInfo, existingChannel) {
-  const isUpdate = !!existingChannel;
-  const config = existingChannel?.config || {};
-
-  return {
-    type: 'modal',
-    callback_id: BLOCK_IDS.SETUP_MODAL,
-    title: {
-      type: 'plain_text',
-      text: isUpdate ? 'Update Standup Setup' : 'Standup Setup'
-    },
-    submit: {
-      type: 'plain_text',
-      text: isUpdate ? 'Update' : 'Create'
-    },
-    close: {
-      type: 'plain_text',
-      text: 'Cancel'
-    },
-    blocks: [
-      // Header
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `${isUpdate ? '✏️ *Update' : '🚀 *Setup'} standup configuration for #${channelInfo.name}*`
-        }
+function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
+    const isUpdate = !!existingChannel;
+    const config = existingChannel?.config || {};
+  
+    // Determine the timezone with the following priority:
+    // 1. Saved in config
+    // 2. User's timezone
+    // 3. UTC as a fallback
+    const defaultTimezone = config.timezone || userTimezone || 'UTC';
+    
+    // Check if this timezone is in our list of supported timezones
+    const supportedTimezone = TIMEZONES.find(tz => tz.value === defaultTimezone);
+    const selectedTimezone = supportedTimezone ? defaultTimezone : 'UTC';
+  
+    return {
+      type: 'modal',
+      callback_id: BLOCK_IDS.SETUP_MODAL,
+      title: {
+        type: 'plain_text',
+        text: isUpdate ? 'Update Standup Setup' : 'Standup Setup'
       },
-      {
-        type: 'divider'
+      submit: {
+        type: 'plain_text',
+        text: isUpdate ? 'Update' : 'Create'
       },
-
-      // Questions input
-      {
-        type: 'input',
-        block_id: BLOCK_IDS.QUESTIONS_INPUT,
-        label: {
-          type: 'plain_text',
-          text: 'Standup Questions'
+      close: {
+        type: 'plain_text',
+        text: 'Cancel'
+      },
+      blocks: [
+        // Header with timezone information
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${isUpdate ? '✏️ *Update' : '🚀 *Setup'} standup configuration for #${channelInfo.name}*`
+          }
         },
-        element: {
-          type: 'plain_text_input',
-          action_id: BLOCK_IDS.QUESTIONS_INPUT,
-          multiline: true,
-          placeholder: {
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `🌍 Auto-detected timezone: *${selectedTimezone}* ${selectedTimezone !== userTimezone ? '(adjusted to supported timezone)' : ''}`
+            }
+          ]
+        },
+        {
+          type: 'divider'
+        },
+  
+        // Questions input (no changes)
+        {
+          type: 'input',
+          block_id: BLOCK_IDS.QUESTIONS_INPUT,
+          label: {
             type: 'plain_text',
-            text: 'Enter each question on a new line...'
+            text: 'Standup Questions'
           },
-          initial_value: config.questions ? config.questions.join('\n') : DEFAULT_STANDUP_QUESTIONS.join('\n')
-        },
-        hint: {
-          type: 'plain_text',
-          text: 'Enter each question on a separate line. Maximum 10 questions.'
-        }
-      },
-
-      // Time selection
-      {
-        type: 'input',
-        block_id: BLOCK_IDS.TIME_SELECT,
-        label: {
-          type: 'plain_text',
-          text: 'Standup Time'
-        },
-        element: {
-          type: 'static_select',
-          action_id: BLOCK_IDS.TIME_SELECT,
-          placeholder: {
+          element: {
+            type: 'plain_text_input',
+            action_id: BLOCK_IDS.QUESTIONS_INPUT,
+            multiline: true,
+            placeholder: {
+              type: 'plain_text',
+              text: 'Enter each question on a new line...'
+            },
+            initial_value: config.questions ? config.questions.join('\n') : DEFAULT_STANDUP_QUESTIONS.join('\n')
+          },
+          hint: {
             type: 'plain_text',
-            text: 'Select time'
-          },
-          initial_option: config.time ? {
-            text: {
-              type: 'plain_text',
-              text: TIME_OPTIONS.find(t => t.value === config.time)?.label || '9:00 AM'
-            },
-            value: config.time
-          } : {
-            text: {
-              type: 'plain_text',
-              text: '9:00 AM'
-            },
-            value: '09:00'
-          },
-          options: TIME_OPTIONS.map(option => ({
-            text: {
-              type: 'plain_text',
-              text: option.label
-            },
-            value: option.value
-          }))
-        }
-      },
-
-      // Days selection
-      {
-        type: 'input',
-        block_id: BLOCK_IDS.DAYS_SELECT,
-        label: {
-          type: 'plain_text',
-          text: 'Standup Days'
+            text: 'Enter each question on a separate line. Maximum 10 questions.'
+          }
         },
-        element: {
-          type: 'checkboxes',
-          action_id: BLOCK_IDS.DAYS_SELECT,
-          initial_options: config.days ? 
-            config.days.map(day => ({
+  
+        // Time selection (no changes)
+        {
+          type: 'input',
+          block_id: BLOCK_IDS.TIME_SELECT,
+          label: {
+            type: 'plain_text',
+            text: 'Standup Time'
+          },
+          element: {
+            type: 'static_select',
+            action_id: BLOCK_IDS.TIME_SELECT,
+            placeholder: {
+              type: 'plain_text',
+              text: 'Select time'
+            },
+            initial_option: config.time ? {
               text: {
                 type: 'plain_text',
-                text: DAY_OPTIONS.find(d => d.value === day)?.label || 'Unknown'
+                text: TIME_OPTIONS.find(t => t.value === config.time)?.label || '9:00 AM'
               },
-              value: day.toString()
-            })) : 
-            [1, 2, 3, 4, 5].map(day => ({
+              value: config.time
+            } : {
               text: {
                 type: 'plain_text',
-                text: DAY_OPTIONS.find(d => d.value === day)?.label || 'Unknown'
+                text: '9:00 AM'
               },
-              value: day.toString()
-            })),
-          options: DAY_OPTIONS.map(option => ({
-            text: {
-              type: 'plain_text',
-              text: option.label
+              value: '09:00'
             },
-            value: option.value.toString()
-          }))
-        }
-      },
-
-      // Timezone selection
-      {
-        type: 'input',
-        block_id: BLOCK_IDS.TIMEZONE_SELECT,
-        label: {
-          type: 'plain_text',
-          text: 'Timezone'
+            options: TIME_OPTIONS.map(option => ({
+              text: {
+                type: 'plain_text',
+                text: option.label
+              },
+              value: option.value
+            }))
+          }
         },
-        element: {
-          type: 'static_select',
-          action_id: BLOCK_IDS.TIMEZONE_SELECT,
-          placeholder: {
+  
+        // Days selection (no changes)
+        {
+          type: 'input',
+          block_id: BLOCK_IDS.DAYS_SELECT,
+          label: {
             type: 'plain_text',
-            text: 'Select timezone'
+            text: 'Standup Days'
           },
-          initial_option: config.timezone ? {
-            text: {
-              type: 'plain_text',
-              text: TIMEZONES.find(tz => tz.value === config.timezone)?.label || 'UTC'
-            },
-            value: config.timezone
-          } : {
-            text: {
-              type: 'plain_text',
-              text: 'UTC (Coordinated Universal Time)'
-            },
-            value: 'UTC'
-          },
-          options: TIMEZONES.map(tz => ({
-            text: {
-              type: 'plain_text',
-              text: tz.label
-            },
-            value: tz.value
-          }))
-        }
-      },
-
-      // Participants selection (optional)
-      {
-        type: 'input',
-        block_id: BLOCK_IDS.PARTICIPANTS_SELECT,
-        label: {
-          type: 'plain_text',
-          text: 'Participants (Optional)'
+          element: {
+            type: 'checkboxes',
+            action_id: BLOCK_IDS.DAYS_SELECT,
+            initial_options: config.days ? 
+              config.days.map(day => ({
+                text: {
+                  type: 'plain_text',
+                  text: DAY_OPTIONS.find(d => d.value === day)?.label || 'Unknown'
+                },
+                value: day.toString()
+              })) : 
+              [1, 2, 3, 4, 5].map(day => ({
+                text: {
+                  type: 'plain_text',
+                  text: DAY_OPTIONS.find(d => d.value === day)?.label || 'Unknown'
+                },
+                value: day.toString()
+              })),
+            options: DAY_OPTIONS.map(option => ({
+              text: {
+                type: 'plain_text',
+                text: option.label
+              },
+              value: option.value.toString()
+            }))
+          }
         },
-        element: {
-          type: 'multi_users_select',
-          action_id: BLOCK_IDS.PARTICIPANTS_SELECT,
-          placeholder: {
+  
+        // Timezone is now auto-detected and not displayed in the form
+  
+        // Participants selection (no changes)
+        {
+          type: 'input',
+          block_id: BLOCK_IDS.PARTICIPANTS_SELECT,
+          label: {
             type: 'plain_text',
-            text: 'Select specific users or leave empty for all channel members'
+            text: 'Participants (Optional)'
           },
-          initial_users: config.participants || []
-        },
-        optional: true,
-        hint: {
-          type: 'plain_text',
-          text: 'Leave empty to include all channel members automatically.'
+          element: {
+            type: 'multi_users_select',
+            action_id: BLOCK_IDS.PARTICIPANTS_SELECT,
+            placeholder: {
+              type: 'plain_text',
+              text: 'Select specific users or leave empty for all channel members'
+            },
+            initial_users: config.participants || []
+          },
+          optional: true,
+          hint: {
+            type: 'plain_text',
+            text: 'Leave empty to include all channel members automatically.'
+          }
         }
-      }
-    ]
-  };
-}
+      ]
+    };
+  }
 
 module.exports = { register };
