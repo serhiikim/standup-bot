@@ -29,7 +29,7 @@ function register(app) {
       console.error('Error parsing metadata:', e);
     }
     
-    // Validate the form data (таймзона больше не валидируется)
+    // Validate the form data (timezone is no longer validated)
     const validation = validateSetupForm(values);
     
     if (!validation.isValid) {
