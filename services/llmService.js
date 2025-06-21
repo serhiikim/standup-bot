@@ -23,30 +23,6 @@ class LLMService {
   }
 
   /**
-   * Extract blockers from analysis text (fallback method)
-   */
-  extractBlockers(analysisText) {
-    const blockerKeywords = ['blocker', 'blocked', 'issue', 'problem', 'challenge', 'stuck', 'difficulty'];
-    const lines = analysisText.toLowerCase().split('\n');
-    
-    return lines.filter(line => 
-      blockerKeywords.some(keyword => line.includes(keyword))
-    ).slice(0, 3);
-  }
-
-  /**
-   * Extract achievements from analysis text (fallback method)
-   */
-  extractAchievements(analysisText) {
-    const achievementKeywords = ['completed', 'finished', 'achieved', 'delivered', 'success', 'done'];
-    const lines = analysisText.toLowerCase().split('\n');
-    
-    return lines.filter(line => 
-      achievementKeywords.some(keyword => line.includes(keyword))
-    ).slice(0, 3);
-  }
-
-  /**
    * Analyze standup responses and generate summary
    */
   async analyzeStandupResponses(standup, responses, slackService = null) {
@@ -71,14 +47,14 @@ class LLMService {
         messages: [
           {
             role: "system",
-            content: "You are an AI assistant that analyzes team standup responses and creates concise, helpful summaries. When you see user mentions like <@U123>, preserve them in your response."
+            content: "You are an AI assistant that analyzes team standup responses and creates concise, helpful summaries. When you see user mentions like <@U123>, preserve them in your response. You can understand and analyze responses in any language - just provide your analysis in English using the requested format."
           },
           {
             role: "user",
             content: prompt
           }
         ],
-        max_tokens: 500,
+        max_tokens: 800,
         temperature: 0.3
       });
 
@@ -109,7 +85,7 @@ class LLMService {
    */
   createAnalysisPrompt(questions, responsesText) {
     return `
-Please analyze the following standup responses and provide a structured summary:
+Please analyze the following standup responses and provide a structured summary. The responses may be in any language - please analyze them accurately and provide your response in English.
 
 STANDUP QUESTIONS:
 ${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
@@ -134,7 +110,7 @@ Please provide your analysis in the following format:
 **TEAM MOOD:**
 [One word: positive, neutral, or negative, with brief explanation]
 
-Keep each section concise and focus on actionable insights.
+Keep each section concise and focus on actionable insights. If no items are found for a category, you can leave it empty or write "None mentioned".
 `;
   }
 
@@ -157,6 +133,7 @@ Keep each section concise and focus on actionable insights.
       for (const line of lines) {
         const trimmedLine = line.trim();
         
+        // Check for section headers
         if (trimmedLine.includes('**SUMMARY:**')) {
           currentSection = 'summary';
           continue;
@@ -174,18 +151,24 @@ Keep each section concise and focus on actionable insights.
           continue;
         }
         
+        // Process content for each section
         if (trimmedLine && !trimmedLine.startsWith('**')) {
           if (currentSection === 'summary') {
             sections.summary += (sections.summary ? ' ' : '') + trimmedLine;
           } else if (currentSection === 'teamMood') {
-            const moodMatch = trimmedLine.toLowerCase().match(/(positive|negative|neutral)/);
+            // Extract mood from the line
+            const moodMatch = trimmedLine.toLowerCase().match(/\b(positive|negative|neutral)\b/);
             if (moodMatch) {
               sections.teamMood = moodMatch[1];
             }
           } else if (currentSection && ['achievements', 'blockers', 'nextSteps'].includes(currentSection)) {
-            // Clean bullet points
-            const cleanLine = trimmedLine.replace(/^[-•*]\s*/, '').trim();
-            if (cleanLine && cleanLine.length > 5) {
+            // Clean up bullet points and add to array
+            const cleanLine = trimmedLine
+              .replace(/^[-•*]\s*/, '') // Remove bullet points
+              .replace(/^\d+\.\s*/, '') // Remove numbered lists
+              .trim();
+            
+            if (cleanLine && cleanLine.length > 3 && !cleanLine.toLowerCase().includes('none mentioned')) {
               sections[currentSection].push(cleanLine);
             }
           }
@@ -196,31 +179,57 @@ Keep each section concise and focus on actionable insights.
       
     } catch (error) {
       console.error('Error parsing structured analysis:', error);
-      // Fallback to original format
+      
+      // If parsing fails completely, try to extract what we can
       return {
-        summary: analysisText.substring(0, 200) + '...',
-        achievements: this.extractAchievements(analysisText),
-        blockers: this.extractBlockers(analysisText),
+        summary: analysisText.length > 200 ? analysisText.substring(0, 200) + '...' : analysisText,
+        achievements: [],
+        blockers: [],
         nextSteps: [],
-        teamMood: this.assessTeamMood(analysisText)
+        teamMood: 'neutral'
       };
     }
   }
 
   /**
-   * Assess team mood from analysis
+   * Analyze team sentiment across all responses
    */
-  assessTeamMood(analysisText) {
-    const positiveWords = ['good', 'great', 'excellent', 'positive', 'happy', 'productive'];
-    const negativeWords = ['difficult', 'challenging', 'frustrated', 'blocked', 'issues'];
-    
-    const text = analysisText.toLowerCase();
-    const positiveCount = positiveWords.filter(word => text.includes(word)).length;
-    const negativeCount = negativeWords.filter(word => text.includes(word)).length;
-    
-    if (positiveCount > negativeCount) return 'positive';
-    if (negativeCount > positiveCount) return 'negative';
-    return 'neutral';
+  async analyzeTeamSentiment(responses) {
+    if (!this.isEnabled || responses.length === 0) {
+      return 'neutral';
+    }
+
+    try {
+      const allResponsesText = responses.map(r => r.responses.join(' ')).join('\n');
+      
+      const completion = await this.openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: "system",
+            content: "Analyze the overall sentiment of these standup responses. Consider the tone, language, and content. Respond with only: positive, negative, or neutral."
+          },
+          {
+            role: "user",
+            content: allResponsesText
+          }
+        ],
+        max_tokens: 10,
+        temperature: 0
+      });
+
+      const sentiment = completion.choices[0].message.content.toLowerCase().trim();
+      
+      if (['positive', 'negative', 'neutral'].includes(sentiment)) {
+        return sentiment;
+      }
+      
+      return 'neutral';
+
+    } catch (error) {
+      console.error('Error analyzing team sentiment:', error);
+      return 'neutral';
+    }
   }
 
   /**
@@ -251,45 +260,6 @@ Keep each section concise and focus on actionable insights.
       generatedBy: 'fallback',
       generatedAt: new Date()
     };
-  }
-
-  /**
-   * Analyze individual response sentiment
-   */
-  async analyzeResponseSentiment(responseText) {
-    if (!this.isEnabled) {
-      return 'neutral';
-    }
-
-    try {
-      const completion = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: "system",
-            content: "Analyze the sentiment of this standup response. Respond with only: positive, negative, or neutral."
-          },
-          {
-            role: "user",
-            content: responseText
-          }
-        ],
-        max_tokens: 10,
-        temperature: 0
-      });
-
-      const sentiment = completion.choices[0].message.content.toLowerCase().trim();
-      
-      if (['positive', 'negative', 'neutral'].includes(sentiment)) {
-        return sentiment;
-      }
-      
-      return 'neutral';
-
-    } catch (error) {
-      console.error('Error analyzing sentiment:', error);
-      return 'neutral';
-    }
   }
 
   /**
