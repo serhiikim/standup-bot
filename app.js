@@ -50,7 +50,7 @@ async function startApp() {
     initializeHandlers();
     
     // Initialize scheduler with app instance
-    scheduler.app = app;
+    scheduler.setApp(app);
     scheduler.start();
     
     // Start the Slack app

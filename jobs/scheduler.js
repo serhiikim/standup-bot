@@ -1,20 +1,36 @@
+// jobs/scheduler.js - простое исправление
+
 const cron = require('node-cron');
 const StandupService = require('../services/standupService');
 const Channel = require('../models/Channel');
 const { WEEKDAYS } = require('../utils/constants');
 
 class Scheduler {
-  constructor(app) {
-    this.app = app;
-    this.standupService = new StandupService(app);
+  constructor() {
+    this.app = null;
+    this.standupService = null;
     this.jobs = new Map();
     this.isRunning = false;
+  }
+
+  /**
+   * Initialize with app (вызывается из app.js)
+   */
+  setApp(app) {
+    this.app = app;
+    this.standupService = new StandupService(app);
+    console.log('✅ Scheduler app initialized');
   }
 
   /**
    * Start the scheduler
    */
   start() {
+    if (!this.app || !this.standupService) {
+      console.error('❌ Scheduler not initialized with app. Call setApp(app) first.');
+      return;
+    }
+
     if (this.isRunning) {
       console.log('⚠️ Scheduler already running');
       return;
@@ -85,6 +101,11 @@ class Scheduler {
    * Check for channels that should have standup now
    */
   async checkScheduledStandups() {
+    if (!this.standupService) {
+      console.error('❌ StandupService not available');
+      return;
+    }
+
     try {
       const now = new Date();
       const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
@@ -166,6 +187,11 @@ class Scheduler {
    * Process expired standups
    */
   async processExpiredStandups() {
+    if (!this.standupService) {
+      console.error('❌ StandupService not available');
+      return;
+    }
+
     try {
       const processed = await this.standupService.processExpiredStandups();
       if (processed > 0) {
@@ -180,6 +206,11 @@ class Scheduler {
    * Process pending reminders
    */
   async processPendingReminders() {
+    if (!this.standupService) {
+      console.error('❌ StandupService not available');
+      return;
+    }
+
     try {
       const processed = await this.standupService.processPendingReminders();
       if (processed > 0) {
@@ -237,6 +268,8 @@ class Scheduler {
   getStatus() {
     return {
       isRunning: this.isRunning,
+      hasApp: !!this.app,
+      hasStandupService: !!this.standupService,
       jobCount: this.jobs.size,
       jobs: Array.from(this.jobs.keys())
     };
