@@ -14,7 +14,7 @@ class StandupService {
   constructor(app) {
     this.app = app;
     this.slackService = new SlackService(app);
-    this.llmService = new LLMService();
+    this.llmService = LLMService.getInstance();
   }
 
   /**

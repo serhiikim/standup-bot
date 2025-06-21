@@ -1,7 +1,18 @@
 const OpenAI = require('openai');
 
 class LLMService {
+  static getInstance() {
+    if (!LLMService.instance) {
+      LLMService.instance = new LLMService();
+    }
+    return LLMService.instance;
+  }
+
   constructor() {
+    if (LLMService.instance) {
+      throw new Error('LLMService is a singleton. Use LLMService.getInstance() instead.');
+    }
+
     console.log('🔍 Checking OpenAI API key...');
     console.log('API Key exists:', !!process.env.OPENAI_API_KEY);
     console.log('API Key length:', process.env.OPENAI_API_KEY?.length || 0);
@@ -20,6 +31,8 @@ class LLMService {
       console.log('✅ OpenAI API key configured successfully');
       console.log('🤖 Using model:', this.model);
     }
+
+    LLMService.instance = this;
   }
 
   /**
