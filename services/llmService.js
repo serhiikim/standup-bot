@@ -2,10 +2,10 @@ const OpenAI = require('openai');
 
 class LLMService {
   constructor() {
+    if (LLMService.instance) {
+        return LLMService.instance;
+      }
     console.log('🔍 Checking OpenAI API key...');
-    console.log('API Key exists:', !!process.env.OPENAI_API_KEY);
-    console.log('API Key length:', process.env.OPENAI_API_KEY?.length || 0);
-    console.log('API Key starts with sk-:', process.env.OPENAI_API_KEY?.startsWith('sk-') || false);
     
     this.openai = process.env.OPENAI_API_KEY ? new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
@@ -20,6 +20,7 @@ class LLMService {
       console.log('✅ OpenAI API key configured successfully');
       console.log('🤖 Using model:', this.model);
     }
+    LLMService.instance = this;
   }
 
   /**
