@@ -6,7 +6,16 @@
     "scripts": {
       "start": "node app.js",
       "dev": "nodemon app.js",
-      "test": "echo \"Error: no test specified\" && exit 1"
+      "test": "echo \"Error: no test specified\" && exit 1",
+      "docker:setup": "./scripts/setup.sh",
+      "docker:start": "./scripts/start.sh",
+      "docker:stop": "./scripts/stop.sh",
+      "docker:restart": "./scripts/restart.sh",
+      "docker:logs": "./scripts/logs.sh",
+      "docker:dev": "./scripts/dev.sh",
+      "docker:health": "./scripts/health.sh",
+      "docker:clean": "./scripts/clean.sh",
+      "docker:update": "./scripts/update.sh"
     },
     "keywords": [
       "slack",
