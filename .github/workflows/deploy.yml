@@ -136,7 +136,7 @@ jobs:
               
               # Show container resources
               echo "📊 Container stats:"
-              docker stats standup-bot --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+              docker stats slack-standup-bot --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
             else
               echo "❌ Container stopped after startup - check logs"
               docker compose logs --tail=100 standup-bot
