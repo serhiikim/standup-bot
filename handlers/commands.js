@@ -95,13 +95,13 @@ function register(app) {
 
       // Check if channel is configured with detailed logging
       const channel = await Channel.findByChannelId(team_id, channel_id);
-      console.log(`🔍 Channel lookup result:`, {
-        found: !!channel,
-        teamId: team_id,
-        channelId: channel_id,
-        isActive: channel?.isActive,
-        status: channel?.status
-      });
+      // console.log(`🔍 Channel lookup result:`, {
+      //   found: !!channel,
+      //   teamId: team_id,
+      //   channelId: channel_id,
+      //   isActive: channel?.isActive,
+      //   status: channel?.status
+      // });
 
       if (!channel) {
         console.log(`❌ Channel ${channel_id} not configured`);
@@ -140,14 +140,6 @@ function register(app) {
       const standup = await standupService.startStandup(team_id, channel_id, user_id, true);
       
       console.log(`✅ Manual standup started successfully: ${standup._id}`);
-      return respond({
-        text: `🚀 Manual standup started successfully!\n\n` +
-              `📋 Standup ID: ${standup._id}\n` +
-              `👥 Expected participants: ${standup.stats.totalExpected}\n` +
-              `⏰ Response deadline: ${standup.responseDeadline.toLocaleString()}\n\n` +
-              `Participants have been notified and can respond in the thread.`,
-        response_type: 'ephemeral'
-      });
 
     } catch (error) {
       console.error('Error in /standup-start command:', error);
