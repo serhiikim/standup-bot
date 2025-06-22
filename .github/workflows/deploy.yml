@@ -45,7 +45,7 @@ jobs:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_USERNAME }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
-          source: "slack-standup-bot.tar,docker-compose.yml"
+          source: "slack-standup-bot.tar,docker-compose.yml,Dockerfile"
           target: "/home/deploy/slack-standup-bot/"
           strip_components: 0
           
