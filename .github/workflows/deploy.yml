@@ -45,7 +45,7 @@ jobs:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_USERNAME }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
-          source: "slack-standup-bot.tar,docker-compose.yml,Dockerfile"
+          source: "slack-standup-bot.tar,docker-compose.yml"
           target: "/home/deploy/slack-standup-bot/"
           strip_components: 0
           
@@ -87,7 +87,7 @@ jobs:
             docker compose down
             
             # Start new containers (without MongoDB profiles for production)
-            COMPOSE_PROFILES="" docker compose up -d standup-bot
+            COMPOSE_PROFILES="" docker compose up -d standup-bot 2>/dev/null || docker compose up -d standup-bot
             
             # Wait a bit for containers to start
             sleep 10
