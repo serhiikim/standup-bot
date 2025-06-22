@@ -10,12 +10,6 @@ const {
   TIMEZONES,
   DEFAULT_STANDUP_QUESTIONS 
 } = require('../utils/constants');
-const { 
-  executeCommand, 
-  executeChannelCommand, 
-  safeRespond,
-  logSlackError 
-} = require('../utils/slackHelpers');
 
 let slackService;
 let standupService;
@@ -25,29 +19,39 @@ function register(app) {
   standupService = new StandupService(app);
 
   // /standup-setup command
-  app.command('/standup-setup', async (params) => {
-    return executeChannelCommand('/standup-setup', params, async (command, respond) => {
+  app.command('/standup-setup', async ({ command, ack, respond, client }) => {
+    await ack();
+
+    try {
       const { team_id, channel_id, user_id, trigger_id } = command;
 
+      console.log(`📋 Setup command received for channel ${channel_id} by user ${user_id}`);
+
       // Get user info to determine timezone
-      const userInfo = await slackService.getUserInfo(user_id);
-      const userTimezone = userInfo.tz || 'UTC';
-      
-      console.log(`User ${user_id} timezone: ${userTimezone}`);
+      let userTimezone = 'UTC';
+      try {
+        const userInfo = await slackService.getUserInfo(user_id);
+        userTimezone = userInfo.tz || 'UTC';
+        console.log(`User ${user_id} timezone: ${userTimezone}`);
+      } catch (error) {
+        console.warn('Could not get user timezone, using UTC:', error.message);
+      }
 
       // Check if bot is in the channel
       let channelInfo;
       try {
         channelInfo = await slackService.getChannelInfo(channel_id);
         if (!channelInfo) {
-          return await safeRespond(respond, {
+          return respond({
             text: '❌ Cannot access this channel. Please invite the bot to this channel first.\n\nType: `/invite @StandupBot`',
             response_type: 'ephemeral'
           });
         }
+        console.log(`📍 Channel info retrieved: #${channelInfo.name}`);
       } catch (error) {
+        console.error('Error getting channel info:', error);
         if (error.data?.error === 'channel_not_found') {
-          return await safeRespond(respond, {
+          return respond({
             text: '❌ Cannot access this channel. Please invite the bot to this channel first.\n\nType: `/invite @StandupBot`',
             response_type: 'ephemeral'
           });
@@ -57,8 +61,9 @@ function register(app) {
 
       // Get current channel configuration if exists
       const existingChannel = await Channel.findByChannelId(team_id, channel_id);
+      console.log(`⚙️ Existing configuration: ${existingChannel ? 'Found' : 'None'}`);
       
-      // Create the setup modal with channel context and user timezone
+      // Create the setup modal
       const modal = createSetupModal(channelInfo, existingChannel, userTimezone);
       
       // Pass channel ID and user timezone in private metadata
@@ -67,85 +72,165 @@ function register(app) {
         userTimezone: userTimezone 
       });
       
-      try {
-        await slackService.openModal(trigger_id, modal);
-        console.log(`Setup modal opened for channel ${channel_id}`);
-      } catch (modalError) {
-        logSlackError('openModal', modalError, { channel_id, user_id });
-        return await safeRespond(respond, {
-          text: MESSAGES.SETUP_ERROR,
+      await slackService.openModal(trigger_id, modal);
+      console.log(`✅ Setup modal opened successfully for channel ${channel_id}`);
+
+    } catch (error) {
+      console.error('Error in /standup-setup command:', error);
+      return respond({
+        text: MESSAGES.SETUP_ERROR,
+        response_type: 'ephemeral'
+      });
+    }
+  });
+
+  // /standup-start command
+  app.command('/standup-start', async ({ command, ack, respond }) => {
+    await ack();
+
+    try {
+      const { team_id, channel_id, user_id } = command;
+
+      console.log(`🚀 Start command received for channel ${channel_id} by user ${user_id}`);
+
+      // Check if channel is configured with detailed logging
+      const channel = await Channel.findByChannelId(team_id, channel_id);
+      console.log(`🔍 Channel lookup result:`, {
+        found: !!channel,
+        teamId: team_id,
+        channelId: channel_id,
+        isActive: channel?.isActive,
+        status: channel?.status
+      });
+
+      if (!channel) {
+        console.log(`❌ Channel ${channel_id} not configured`);
+        return respond({
+          text: `${MESSAGES.CHANNEL_NOT_CONFIGURED}\n\n💡 *Quick fix:* Run \`/standup-setup\` first to configure this channel.`,
           response_type: 'ephemeral'
         });
       }
-    });
-  });
 
-  // /standup-start command (manual start for testing)
-  app.command('/standup-start', async (params) => {
-    return executeChannelCommand('/standup-start', params, async (command, respond) => {
-      const { team_id, channel_id, user_id } = command;
-
-      // Check if channel is configured
-      const channel = await Channel.findByChannelId(team_id, channel_id);
-      if (!channel) {
-        return await safeRespond(respond, {
-          text: MESSAGES.CHANNEL_NOT_CONFIGURED,
+      if (!channel.isActive) {
+        console.log(`❌ Channel ${channel_id} is inactive (status: ${channel.status})`);
+        return respond({
+          text: `❌ Standups are disabled for this channel.\n\n💡 *Quick fix:* Run \`/standup-setup\` to re-enable standups.`,
           response_type: 'ephemeral'
         });
       }
 
       // Check for active standups
       const activeStandups = await Standup.findActiveByChannel(team_id, channel_id);
+      console.log(`🔄 Active standups in channel: ${activeStandups.length}`);
+      
       if (activeStandups.length > 0) {
-        return await safeRespond(respond, {
-          text: '⚠️ There is already an active standup in this channel.',
+        const activeStandup = activeStandups[0];
+        return respond({
+          text: `⚠️ There is already an active standup in this channel.\n\n` +
+                `📊 *Current standup:*\n` +
+                `• Started: ${activeStandup.startedAt.toLocaleString()}\n` +
+                `• Responses: ${activeStandup.stats.totalResponded}/${activeStandup.stats.totalExpected}\n` +
+                `• Deadline: ${activeStandup.responseDeadline.toLocaleString()}`,
           response_type: 'ephemeral'
         });
       }
 
-      // Start manual standup using standupService
+      // Start manual standup
+      console.log(`🎯 Starting manual standup for channel ${channel_id}`);
       const standup = await standupService.startStandup(team_id, channel_id, user_id, true);
       
-      return await safeRespond(respond, {
-        text: `🚀 Manual standup started successfully!\n\nParticipants have been notified and can respond in the thread.`,
+      console.log(`✅ Manual standup started successfully: ${standup._id}`);
+      return respond({
+        text: `🚀 Manual standup started successfully!\n\n` +
+              `📋 Standup ID: ${standup._id}\n` +
+              `👥 Expected participants: ${standup.stats.totalExpected}\n` +
+              `⏰ Response deadline: ${standup.responseDeadline.toLocaleString()}\n\n` +
+              `Participants have been notified and can respond in the thread.`,
         response_type: 'ephemeral'
       });
-    });
+
+    } catch (error) {
+      console.error('Error in /standup-start command:', error);
+      
+      // Handle specific error types
+      if (error.message === 'Channel not configured or inactive') {
+        return respond({
+          text: `❌ This channel is not properly configured for standups.\n\n💡 *Solution:* Run \`/standup-setup\` to configure this channel first.`,
+          response_type: 'ephemeral'
+        });
+      }
+      
+      if (error.message === 'Bot removed from channel - standups auto-disabled') {
+        return respond({
+          text: '🤖 Bot was removed from this channel, so standups have been automatically disabled.\n\n💡 *Solution:* Re-invite the bot (`/invite @StandupBot`) and run `/standup-setup`.',
+          response_type: 'ephemeral'
+        });
+      }
+
+      return respond({
+        text: `❌ Failed to start standup: ${error.message}\n\n💡 Try running \`/standup-status\` to check the current configuration.`,
+        response_type: 'ephemeral'
+      });
+    }
   });
 
-  // /standup-status command
-  app.command('/standup-status', async (params) => {
-    return executeChannelCommand('/standup-status', params, async (command, respond) => {
+  // /standup-status command - enhanced with detailed diagnostics
+  app.command('/standup-status', async ({ command, ack, respond }) => {
+    await ack();
+
+    try {
       const { team_id, channel_id } = command;
+
+      console.log(`📊 Status command received for channel ${channel_id}`);
 
       // Get comprehensive status using standupService
       const status = await standupService.getChannelStatus(team_id, channel_id);
+      
       if (!status) {
-        return await safeRespond(respond, {
-          text: MESSAGES.CHANNEL_NOT_CONFIGURED,
+        console.log(`❌ No status found for channel ${channel_id}`);
+        
+        // Check if channel exists in database but is inactive
+        const channel = await Channel.findByChannelId(team_id, channel_id);
+        
+        if (channel) {
+          return respond({
+            text: `📊 *Standup Status for #${channel.channelName}*\n\n` +
+                  `❌ *Status:* ${channel.status} (${channel.isActive ? 'Active' : 'Inactive'})\n\n` +
+                  `💡 *Quick fix:* Run \`/standup-setup\` to ${channel.isActive ? 'update' : 'reactivate'} configuration.`,
+            response_type: 'ephemeral'
+          });
+        }
+        
+        return respond({
+          text: `${MESSAGES.CHANNEL_NOT_CONFIGURED}\n\n💡 *Quick fix:* Run \`/standup-setup\` to configure this channel.`,
           response_type: 'ephemeral'
         });
       }
 
       const { channel, activeStandups, recentStandups } = status;
       
-      // Build status message
+      // Build enhanced status message
       let statusText = `📊 *Standup Status for #${channel.channelName}*\n\n`;
       
       // Configuration info
       statusText += `⚙️ *Configuration:*\n`;
       statusText += `• Time: ${channel.config.time} (${channel.config.timezone})\n`;
       statusText += `• Days: ${channel.config.days.map(day => DAY_OPTIONS.find(d => d.value === day)?.label).join(', ')}\n`;
-      statusText += `• Status: ${channel.status}\n`;
-      statusText += `• Questions: ${channel.config.questions.length}\n\n`;
+      statusText += `• Status: ${channel.status} ${channel.isActive ? '✅' : '❌'}\n`;
+      statusText += `• Questions: ${channel.config.questions.length}\n`;
+      statusText += `• Participants: ${channel.config.participants.length > 0 ? `${channel.config.participants.length} specific users` : 'All channel members'}\n\n`;
 
       // Active standup info
       if (activeStandups.length > 0) {
         const activeStandup = activeStandups[0];
         statusText += `🔄 *Active Standup:*\n`;
+        statusText += `• ID: ${activeStandup._id}\n`;
         statusText += `• Started: ${activeStandup.startedAt.toLocaleString()}\n`;
         statusText += `• Responses: ${activeStandup.stats.totalResponded}/${activeStandup.stats.totalExpected}\n`;
+        statusText += `• Response Rate: ${activeStandup.getResponseRate()}%\n`;
         statusText += `• Deadline: ${activeStandup.responseDeadline.toLocaleString()}\n\n`;
+      } else {
+        statusText += `🔄 *Active Standup:* None\n\n`;
       }
 
       // Statistics
@@ -164,83 +249,178 @@ function register(app) {
         statusText += `📋 *Recent Standups:* None\n`;
       }
 
-      return await safeRespond(respond, {
+      return respond({
         text: statusText,
         response_type: 'ephemeral'
       });
-    });
+
+    } catch (error) {
+      console.error('Error in /standup-status command:', error);
+      return respond({
+        text: '❌ Failed to get status. Please try again.',
+        response_type: 'ephemeral'
+      });
+    }
   });
 
   // /standup-complete command
-  app.command('/standup-complete', async (params) => {
-    return executeChannelCommand('/standup-complete', params, async (command, respond) => {
+  app.command('/standup-complete', async ({ command, ack, respond }) => {
+    await ack();
+
+    try {
       const { team_id, channel_id } = command;
+
+      console.log(`✅ Complete command received for channel ${channel_id}`);
 
       // Get active standup
       const activeStandups = await Standup.findActiveByChannel(team_id, channel_id);
       if (activeStandups.length === 0) {
-        return await safeRespond(respond, {
+        return respond({
           text: '❌ No active standup found in this channel.',
           response_type: 'ephemeral'
         });
       }
 
       const standup = activeStandups[0];
+      console.log(`🎯 Completing standup ${standup._id}`);
+      
       const success = await standupService.completeStandup(standup._id, 'manual_admin');
 
-      const responseMessage = success 
-        ? '✅ Standup completed successfully!'
-        : '❌ Failed to complete standup.';
+      if (success) {
+        console.log(`✅ Standup ${standup._id} completed successfully`);
+        return respond({
+          text: `✅ Standup completed successfully!\n\n📊 Final stats: ${standup.stats.totalResponded}/${standup.stats.totalExpected} responses`,
+          response_type: 'ephemeral'
+        });
+      } else {
+        return respond({
+          text: '❌ Failed to complete standup.',
+          response_type: 'ephemeral'
+        });
+      }
 
-      return await safeRespond(respond, {
-        text: responseMessage,
+    } catch (error) {
+      console.error('Error in /standup-complete command:', error);
+      return respond({
+        text: '❌ Failed to complete standup. Please try again.',
         response_type: 'ephemeral'
       });
-    });
+    }
   });
 
   // /standup-remind command
-  app.command('/standup-remind', async (params) => {
-    return executeChannelCommand('/standup-remind', params, async (command, respond) => {
+  app.command('/standup-remind', async ({ command, ack, respond }) => {
+    await ack();
+
+    try {
       const { team_id, channel_id } = command;
+
+      console.log(`📢 Remind command received for channel ${channel_id}`);
 
       // Get active standup
       const activeStandups = await Standup.findActiveByChannel(team_id, channel_id);
       if (activeStandups.length === 0) {
-        return await safeRespond(respond, {
+        return respond({
           text: '❌ No active standup found in this channel.',
           response_type: 'ephemeral'
         });
       }
 
       const standup = activeStandups[0];
+      const missingCount = standup.getMissingParticipants().length;
+      
+      console.log(`📢 Sending reminders for standup ${standup._id} (${missingCount} missing participants)`);
+      
       const success = await standupService.sendReminders(standup._id);
 
-      const responseMessage = success 
-        ? '📢 Reminders sent successfully!'
-        : '❌ No reminders needed (everyone responded or no missing participants).';
+      if (success) {
+        return respond({
+          text: `📢 Reminders sent successfully!\n\n👥 Reminded ${missingCount} participant(s) who haven't responded yet.`,
+          response_type: 'ephemeral'
+        });
+      } else {
+        return respond({
+          text: '❌ No reminders needed (everyone responded or no missing participants).',
+          response_type: 'ephemeral'
+        });
+      }
 
-      return await safeRespond(respond, {
-        text: responseMessage,
+    } catch (error) {
+      console.error('Error in /standup-remind command:', error);
+      return respond({
+        text: '❌ Failed to send reminders. Please try again.',
         response_type: 'ephemeral'
       });
-    });
+    }
   });
 
-  console.log('✅ Command handlers registered with enhanced error handling');
+  // /standup-debug command for troubleshooting
+  app.command('/standup-debug', async ({ command, ack, respond }) => {
+    await ack();
+
+    try {
+      const { team_id, channel_id } = command;
+
+      console.log(`🔍 Debug command received for channel ${channel_id}`);
+
+      // Get raw database info
+      const channel = await Channel.findByChannelId(team_id, channel_id);
+      const activeStandups = await Standup.findActiveByChannel(team_id, channel_id);
+      
+      let debugText = `🔍 *Debug Info for Channel ${channel_id}*\n\n`;
+      
+      // Channel info
+      debugText += `**Channel Configuration:**\n`;
+      if (channel) {
+        debugText += `• Found: ✅\n`;
+        debugText += `• ID: ${channel._id}\n`;
+        debugText += `• Name: ${channel.channelName}\n`;
+        debugText += `• Active: ${channel.isActive}\n`;
+        debugText += `• Status: ${channel.status}\n`;
+        debugText += `• Created: ${channel.createdAt}\n`;
+        debugText += `• Updated: ${channel.updatedAt}\n`;
+        debugText += `• Questions count: ${channel.config.questions.length}\n`;
+        debugText += `• Participants: ${channel.config.participants.length}\n`;
+      } else {
+        debugText += `• Found: ❌\n`;
+      }
+      
+      debugText += `\n**Active Standups:**\n`;
+      if (activeStandups.length > 0) {
+        activeStandups.forEach((standup, index) => {
+          debugText += `• Standup ${index + 1}: ${standup._id}\n`;
+          debugText += `  - Status: ${standup.status}\n`;
+          debugText += `  - Started: ${standup.startedAt}\n`;
+          debugText += `  - Expected: ${standup.stats.totalExpected}\n`;
+          debugText += `  - Responded: ${standup.stats.totalResponded}\n`;
+        });
+      } else {
+        debugText += `• No active standups found\n`;
+      }
+
+      return respond({
+        text: debugText,
+        response_type: 'ephemeral'
+      });
+
+    } catch (error) {
+      console.error('Error in /standup-debug command:', error);
+      return respond({
+        text: `❌ Debug failed: ${error.message}`,
+        response_type: 'ephemeral'
+      });
+    }
+  });
+
+  console.log('✅ Enhanced command handlers registered with detailed logging');
 }
 
 function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
   const isUpdate = !!existingChannel;
   const config = existingChannel?.config || {};
 
-  // Determine the timezone with the following priority:
-  // 1. Saved in config
-  // 2. User's timezone
-  // 3. UTC as a fallback
+  // Determine the timezone with priority
   const defaultTimezone = config.timezone || userTimezone || 'UTC';
-  
-  // Check if this timezone is in our list of supported timezones
   const supportedTimezone = TIMEZONES.find(tz => tz.value === defaultTimezone);
   const selectedTimezone = supportedTimezone ? defaultTimezone : 'UTC';
 
@@ -375,6 +555,38 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
               text: option.label
             },
             value: option.value.toString()
+          }))
+        }
+      },
+
+      // Timezone selection
+      {
+        type: 'input',
+        block_id: BLOCK_IDS.TIMEZONE_SELECT,
+        label: {
+          type: 'plain_text',
+          text: 'Timezone'
+        },
+        element: {
+          type: 'static_select',
+          action_id: BLOCK_IDS.TIMEZONE_SELECT,
+          placeholder: {
+            type: 'plain_text',
+            text: 'Select timezone'
+          },
+          initial_option: {
+            text: {
+              type: 'plain_text',
+              text: TIMEZONES.find(tz => tz.value === selectedTimezone)?.label || 'UTC'
+            },
+            value: selectedTimezone
+          },
+          options: TIMEZONES.map(tz => ({
+            text: {
+              type: 'plain_text',
+              text: tz.label
+            },
+            value: tz.value
           }))
         }
       },
