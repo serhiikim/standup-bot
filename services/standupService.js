@@ -65,6 +65,7 @@ class StandupService {
 
       // Post standup message to channel
       const standupMessage = this.createStandupMessage(standupInstance, participants, channel);
+      try {
       const messageResult = await this.slackService.postMessage(
         channelId,
         standupMessage.text,
@@ -79,6 +80,21 @@ class StandupService {
       // Update channel statistics
       channel.incrementStandupCount();
       await channel.save();
+    } catch (postError) {
+      if (this.isBotRemovedError(postError)) {
+        console.log(`🤖 Bot removed from channel ${channelId}, auto-disabling standups`);
+        
+        await this.autoDisableChannel(teamId, channelId, 'bot_removed');
+        
+        // Delete the standup we just created since we can't use it
+        await standupInstance.delete();
+        
+        throw new Error('Bot removed from channel - standups auto-disabled');
+      }
+      
+      // Re-throw other errors
+      throw postError;
+    }
 
       // Schedule reminder if enabled
       if (channel.config.enableReminders) {
@@ -95,6 +111,45 @@ class StandupService {
       throw error;
     }
   }
+
+
+  /**
+ * Check if error indicates bot was removed from channel
+ */
+isBotRemovedError(error) {
+  return error.data?.error === 'channel_not_found' || 
+         error.data?.error === 'not_in_channel' ||
+         error.data?.error === 'channel_is_archived';
+}
+
+/**
+ * Automatically disable standups when bot is removed
+ */
+async autoDisableChannel(teamId, channelId, reason = 'bot_removed') {
+  try {
+    const updateData = {
+      status: 'disabled',
+      isActive: false,
+      disabledAt: new Date(),
+      disabledReason: reason,
+      autoDisabled: true
+    };
+    
+    const success = await Channel.updateByChannelId(teamId, channelId, updateData);
+    
+    if (success) {
+      console.log(`✅ Auto-disabled standups for channel ${channelId} (reason: ${reason})`);
+    } else {
+      console.warn(`⚠️ Failed to auto-disable channel ${channelId}`);
+    }
+    
+    return success;
+    
+  } catch (error) {
+    console.error(`❌ Error auto-disabling channel ${channelId}:`, error);
+    return false;
+  }
+}
 
   /**
    * Get participants for standup
@@ -518,13 +573,13 @@ class StandupService {
           ]
         });
       }
-    } else {
+    } else if (responses.length > 0) {
       blocks.push({
         type: 'context',
         elements: [
           {
             type: 'mrkdwn',
-            text: '🤖 AI analysis unavailable - check OpenAI API key in settings'
+            text: '🤖 AI analysis unavailable'
           }
         ]
       });
