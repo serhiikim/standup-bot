@@ -3,8 +3,8 @@ services:
     build: .
     container_name: slack-standup-bot
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+#    ports:
+#     - "3000:3000"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}

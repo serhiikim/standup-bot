@@ -1,0 +1,194 @@
+name: Deploy Slack Standup Bot to Hetzner
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Telegram notification on start
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            🤖 Slack Standup Bot Deployment started!
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Triggered by: ${{ github.actor }}
+            
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Build and save Docker image
+        run: |
+          # Add timestamp to force rebuild
+          echo "BUILD_TIME=$(date)" > ./build-time.txt
+          echo "COMMIT_SHA=${{ github.sha }}" >> ./build-time.txt
+          
+          # Build with no-cache option
+          docker build --no-cache -t slack-standup-bot:latest .
+          
+          # Save image
+          docker save slack-standup-bot:latest > slack-standup-bot.tar
+          
+      - name: Copy files to Hetzner
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USERNAME }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          source: "slack-standup-bot.tar,docker-compose.yml"
+          target: "/home/deploy/slack-standup-bot/"
+          strip_components: 0
+          
+      - name: Deploy to Hetzner
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USERNAME }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            cd /home/deploy/slack-standup-bot
+            
+            # Create .env file if it doesn't exist (first deploy)
+            if [ ! -f .env ]; then
+              echo "Creating .env file from secrets..."
+              cat > .env << EOF
+            # Slack Configuration
+            SLACK_BOT_TOKEN=${{ secrets.SLACK_BOT_TOKEN }}
+            SLACK_SIGNING_SECRET=${{ secrets.SLACK_SIGNING_SECRET }}
+            SLACK_APP_TOKEN=${{ secrets.SLACK_APP_TOKEN }}
+            
+            # MongoDB
+            MONGODB_URI=${{ secrets.MONGODB_URI }}
+            
+            # OpenAI (Optional)
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            OPENAI_MODEL=gpt-4o-mini
+            
+            # Server
+            PORT=3000
+            NODE_ENV=production
+            EOF
+            fi
+            
+            # Load new image
+            docker load < slack-standup-bot.tar
+            
+            # Stop and remove old containers
+            docker compose down
+            
+            # Start new containers (without MongoDB profiles for production)
+            COMPOSE_PROFILES="" docker compose up -d standup-bot
+            
+            # Wait a bit for containers to start
+            sleep 10
+            
+            # Check if container is running
+            if docker compose ps standup-bot | grep -q "Up"; then
+              echo "✅ Container is running successfully"
+              
+              # Show container status
+              docker compose ps standup-bot
+              
+              # Show recent logs
+              echo "📋 Recent logs:"
+              docker compose logs --tail=20 standup-bot
+            else
+              echo "❌ Failed to start container"
+              docker compose logs standup-bot
+              exit 1
+            fi
+            
+            # Cleanup
+            rm slack-standup-bot.tar
+            
+            # Remove unused images
+            docker image prune -f
+            
+      - name: Verify deployment
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USERNAME }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            cd /home/deploy/slack-standup-bot
+            
+            # Wait for app to fully initialize
+            sleep 15
+            
+            # Check if container is still running after initialization
+            if docker compose ps standup-bot | grep -q "Up"; then
+              echo "✅ Bot is running and stable"
+              
+              # Show final logs to verify Slack connection
+              echo "📋 Final startup logs:"
+              docker compose logs --tail=30 standup-bot | grep -E "(✅|❌|🚀|Connected|Error)"
+              
+              # Show container resources
+              echo "📊 Container stats:"
+              docker stats standup-bot --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+            else
+              echo "❌ Container stopped after startup - check logs"
+              docker compose logs --tail=100 standup-bot
+              exit 1
+            fi
+            
+      - name: Clean up local files
+        if: always()
+        run: |
+          rm -f slack-standup-bot.tar
+          
+      - name: Send Telegram notification on success
+        if: success()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            ✅ Slack Standup Bot Deployment completed successfully!
+            
+            🚀 Bot is now running on Hetzner server
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            
+            🤖 Features ready:
+            • Automated standup scheduling
+            • AI-powered response analysis
+            • Smart reminders
+            • Real-time response tracking
+            
+            Deployed by: ${{ github.actor }}
+            
+      - name: Send Telegram notification on failure
+        if: failure()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            ❌ Slack Standup Bot Deployment failed!
+            
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            
+            Triggered by: ${{ github.actor }}
+            
+            🔍 Please check:
+            • GitHub Actions logs
+            • Server logs: docker compose logs
+            • Environment variables
+            • MongoDB connection
+            
+            Check logs at: https://github.com/${{ github.repository }}/actions
