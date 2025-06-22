@@ -518,13 +518,13 @@ class StandupService {
           ]
         });
       }
-    } else {
+    } else if (responses.length > 0) {
       blocks.push({
         type: 'context',
         elements: [
           {
             type: 'mrkdwn',
-            text: '🤖 AI analysis unavailable - check OpenAI API key in settings'
+            text: '🤖 AI analysis unavailable'
           }
         ]
       });

@@ -27,14 +27,7 @@ class Response {
     this.lastEditedAt = data.lastEditedAt || null;
     this.responseTime = data.responseTime || null; // Time taken to respond (ms from standup start)
     
-    // AI analysis (for future use)
-    this.analysis = data.analysis || {
-      sentiment: null, // positive, neutral, negative
-      blockers: [], // Extracted blockers/issues
-      achievements: [], // Extracted accomplishments
-      plans: [], // Extracted plans/goals
-      confidence: null // AI confidence score
-    };
+
     
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || new Date();
@@ -205,19 +198,8 @@ class Response {
     }
   }
 
-  // Analysis methods
-  updateAnalysis(analysisData) {
-    this.analysis = { ...this.analysis, ...analysisData };
-    this.updatedAt = new Date();
-  }
 
-  hasBlockers() {
-    return this.analysis.blockers && this.analysis.blockers.length > 0;
-  }
 
-  getSentiment() {
-    return this.analysis.sentiment || 'neutral';
-  }
 
   // Helper methods
   getFormattedResponse(questions) {
@@ -238,8 +220,6 @@ class Response {
       isComplete: this.isComplete,
       submittedAt: this.submittedAt,
       responseTime: this.responseTime,
-      hasBlockers: this.hasBlockers(),
-      sentiment: this.getSentiment()
     };
   }
 
@@ -306,13 +286,7 @@ class Response {
       total: responses.length,
       complete: responses.filter(r => r.isComplete).length,
       incomplete: responses.filter(r => !r.isComplete).length,
-      withBlockers: responses.filter(r => r.hasBlockers()).length,
       avgResponseTime: 0,
-      sentiments: {
-        positive: responses.filter(r => r.getSentiment() === 'positive').length,
-        neutral: responses.filter(r => r.getSentiment() === 'neutral').length,
-        negative: responses.filter(r => r.getSentiment() === 'negative').length
-      }
     };
     
     // Calculate average response time
