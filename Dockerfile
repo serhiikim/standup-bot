@@ -12,8 +12,6 @@ COPY . .
 # Create logs directory
 RUN mkdir -p logs
 
-# Expose port
-EXPOSE 3000
 
 
 # Start application
