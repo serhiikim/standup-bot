@@ -104,26 +104,18 @@ class Scheduler {
       console.error('❌ StandupService not available');
       return;
     }
-
+  
     try {
       const now = new Date();
       const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-
+  
       // Find channels scheduled for today
       const channels = await Channel.findScheduledForToday(currentDay, now);
-
+  
       for (const channel of channels) {
         try {
-          // Check if it's the right time for this channel
-          const [configHour, configMinute] = channel.config.time.split(':').map(Number);
-          
-          // Allow 1-minute window for scheduling
-          if (currentHour === configHour && 
-              currentMinute >= configMinute && 
-              currentMinute < configMinute + 1) {
-            
+          // ✅ Use channel method to check time (it considers timezone!)
+          if (channel.isTimeForStandup(now)) {
             console.log(`🕒 Time to start standup for channel ${channel.channelId}`);
             
             // Check if standup already started today
@@ -131,7 +123,7 @@ class Scheduler {
               console.log(`⏭️ Standup already started today for channel ${channel.channelId}`);
               continue;
             }
-
+  
             // Start automated standup
             await this.standupService.startStandup(
               channel.teamId,
@@ -139,15 +131,14 @@ class Scheduler {
               'system',
               false // not manual
             );
-
+  
             console.log(`✅ Auto-started standup for channel ${channel.channelId}`);
-
           }
         } catch (error) {
           console.error(`❌ Error starting standup for channel ${channel.channelId}:`, error);
         }
       }
-
+  
     } catch (error) {
       console.error('❌ Error checking scheduled standups:', error);
     }
