@@ -173,7 +173,9 @@ function validateSetupForm(values) {
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const daysText = days.map(day => dayNames[day]).join(', ');
   
-    const timezone = userTimezone;
+    // ✅ MAIN FIX: Use selected timezone from form!
+    const selectedTimezone = values[BLOCK_IDS.TIMEZONE_SELECT]?.[BLOCK_IDS.TIMEZONE_SELECT]?.selected_option?.value;
+    const timezone = selectedTimezone || userTimezone || 'UTC';
   
     // Extract participants (optional)
     const participantsData = values[BLOCK_IDS.PARTICIPANTS_SELECT]?.[BLOCK_IDS.PARTICIPANTS_SELECT];
@@ -184,7 +186,7 @@ function validateSetupForm(values) {
       time,
       days,
       daysText,
-      timezone,
+      timezone, // ✅ Now this is the SELECTED timezone, not userTimezone!
       participants
     };
   }

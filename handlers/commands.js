@@ -411,12 +411,25 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
   const isUpdate = !!existingChannel;
   const config = existingChannel?.config || {};
 
-  // Determine the timezone with priority
-  const defaultTimezone = config.timezone || userTimezone || 'UTC';
+  let defaultTimezone;
+  
+  if (isUpdate) {
+    // When UPDATE - use existing channel configuration
+    defaultTimezone = config.timezone || userTimezone || 'UTC';
+  } else {
+    // When CREATE - ALWAYS use auto-detected user timezone
+    defaultTimezone = userTimezone || 'UTC';
+  }
+  
   const supportedTimezone = TIMEZONES.find(tz => tz.value === defaultTimezone);
   const selectedTimezone = supportedTimezone ? defaultTimezone : 'UTC';
 
-  return {
+  // ✅ Correct message
+  const timezoneHint = isUpdate 
+    ? `Current timezone: *${selectedTimezone}*`
+    : `Auto-detected timezone: *${selectedTimezone}* ${selectedTimezone !== userTimezone ? '(adjusted to supported timezone)' : ''}`;
+
+  return  {
     type: 'modal',
     callback_id: BLOCK_IDS.SETUP_MODAL,
     title: {
@@ -445,7 +458,7 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
         elements: [
           {
             type: 'mrkdwn',
-            text: `🌍 Auto-detected timezone: *${selectedTimezone}* ${selectedTimezone !== userTimezone ? '(adjusted to supported timezone)' : ''}`
+            text: `🌍 ${timezoneHint}`
           }
         ]
       },
@@ -571,7 +584,7 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
               type: 'plain_text',
               text: TIMEZONES.find(tz => tz.value === selectedTimezone)?.label || 'UTC'
             },
-            value: selectedTimezone
+            value: selectedTimezone // ✅ Use correct timezone!
           },
           options: TIMEZONES.map(tz => ({
             text: {
