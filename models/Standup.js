@@ -196,7 +196,8 @@ class Standup {
     if (!this.reminders.nextReminderAt) {
       return null;
     }
-    return this.reminders.nextReminderAt - new Date();
+    const timeUntil = this.reminders.nextReminderAt - new Date();
+    return timeUntil > 0 ? timeUntil : 0;
   }
 
   // Statistics
