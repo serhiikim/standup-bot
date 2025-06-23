@@ -2,12 +2,14 @@ const SlackService = require('../services/slackService');
 const Channel = require('../models/Channel');
 const Standup = require('../models/Standup');
 const Response = require('../models/Response');
+const StandupService = require('../services/standupService');
 
 let slackService;
+let standupService;
 
 function register(app) {
   slackService = new SlackService(app);
-
+  standupService = new StandupService(app);
   // Handle messages in threads (for standup responses)
   app.event('message', async ({ event, client }) => {
     try {
@@ -91,9 +93,7 @@ function register(app) {
       console.log(`Standup response ${responseAction} from ${userInfo.name}`);
 
       // 🎯 SINGLE RESPONSIBILITY: Delegate all business logic to StandupService
-      const StandupService = require('../services/standupService');
-      const standupService = new StandupService(app);
-      
+
       const completionResult = await standupService.checkStandupCompletion(standup._id, 'response');
       
       if (completionResult.success) {
