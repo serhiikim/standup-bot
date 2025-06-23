@@ -601,7 +601,7 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
         block_id: BLOCK_IDS.PARTICIPANTS_SELECT,
         label: {
           type: 'plain_text',
-          text: 'Participants (Optional)'
+          text: 'Participants'
         },
         element: {
           type: 'multi_users_select',

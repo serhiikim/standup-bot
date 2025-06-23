@@ -25,13 +25,8 @@ function register(app) {
 
       // Check if this is a response to an active standup
       const standup = await Standup.findByThreadTs(team, thread_ts);
-      if (!standup) {
-        return; // Not a standup thread
-      }
-
-      // Check if standup is still active
-      if (!standup.isActive()) {
-        return;
+      if (!standup || !standup.isActive()) {
+        return; // Not an active standup thread
       }
 
       // Check if user is expected to participate
@@ -42,8 +37,9 @@ function register(app) {
       // Get user info for better display
       const userInfo = await slackService.getUserInfo(user);
       
-      // Check if user already responded
+      // Handle response (create or update)
       const existingResponse = await Response.findByStandupAndUser(standup._id, user);
+      let responseAction = '';
       
       if (existingResponse) {
         // Update existing response
@@ -51,6 +47,7 @@ function register(app) {
         existingResponse.messageTs = ts;
         existingResponse.markAsEdited();
         await existingResponse.save();
+        responseAction = 'updated';
 
         // React to show update received
         await client.reactions.add({
@@ -81,6 +78,7 @@ function register(app) {
         // Update standup participant list
         standup.addParticipant(user);
         await standup.save();
+        responseAction = 'received';
 
         // React to show response received
         await client.reactions.add({
@@ -90,17 +88,18 @@ function register(app) {
         });
       }
 
-      console.log(`Standup response ${existingResponse ? 'updated' : 'received'} from ${userInfo.name}`);
+      console.log(`Standup response ${responseAction} from ${userInfo.name}`);
 
-      const freshStandup = await Standup.findById(standup._id);
-      if (freshStandup && freshStandup.hasAllResponses()) {
-        console.log(`🎯 All responses received for standup ${standup._id}, clearing future reminders`);
-        
-        // Clear future reminders
-        freshStandup.setNextReminder(null);
-        await freshStandup.save();
-        
-        console.log(`✅ Future reminders cleared for standup ${standup._id}`);
+      // 🎯 SINGLE RESPONSIBILITY: Delegate all business logic to StandupService
+      const StandupService = require('../services/standupService');
+      const standupService = new StandupService(app);
+      
+      const completionResult = await standupService.checkStandupCompletion(standup._id, 'response');
+      
+      if (completionResult.success) {
+        console.log(`📊 Standup completion check result:`, completionResult);
+      } else {
+        console.error(`❌ Standup completion check failed:`, completionResult.error);
       }
 
     } catch (error) {

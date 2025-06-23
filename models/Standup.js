@@ -180,6 +180,25 @@ class Standup {
     }
   }
 
+  clearReminders() {
+    this.reminders.nextReminderAt = null;
+    this.updatedAt = new Date();
+    console.log(`🔕 Cleared reminders for standup ${this._id}`);
+  }
+
+  // Enhanced reminder management
+  hasScheduledReminder() {
+    return this.reminders.nextReminderAt && new Date() < this.reminders.nextReminderAt;
+  }
+
+  // Get time until next reminder
+  getTimeUntilNextReminder() {
+    if (!this.reminders.nextReminderAt) {
+      return null;
+    }
+    return this.reminders.nextReminderAt - new Date();
+  }
+
   // Statistics
   updateStats() {
     this.stats.totalResponded = this.actualParticipants.length;
