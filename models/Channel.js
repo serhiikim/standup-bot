@@ -199,15 +199,15 @@ class Channel {
       const currentHour = parseInt(parts.find(p => p.type === 'hour').value);
       const currentMinute = parseInt(parts.find(p => p.type === 'minute').value);
       
-      console.log(`🕐 Channel ${this.channelId} time check:`, {
-        configTime: `${configHour}:${String(configMinute).padStart(2, '0')}`,
-        timezone: channelTimezone,
-        currentTimeUTC: now.toISOString(),
-        currentTimeInTZ: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
-        currentHour,
-        currentMinute,
-        matches: currentHour === configHour && currentMinute === configMinute
-      });
+      // console.log(`🕐 Channel ${this.channelId} time check:`, {
+      //   configTime: `${configHour}:${String(configMinute).padStart(2, '0')}`,
+      //   timezone: channelTimezone,
+      //   currentTimeUTC: now.toISOString(),
+      //   currentTimeInTZ: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
+      //   currentHour,
+      //   currentMinute,
+      //   matches: currentHour === configHour && currentMinute === configMinute
+      // });
       
       return currentHour === configHour && currentMinute === configMinute;
       
@@ -220,11 +220,11 @@ class Channel {
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
       
-      console.log(`🕐 Channel ${this.channelId} fallback UTC check:`, {
-        configTime: `${configHour}:${String(configMinute).padStart(2, '0')}`,
-        currentTime: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
-        matches: currentHour === configHour && currentMinute === configMinute
-      });
+      // console.log(`🕐 Channel ${this.channelId} fallback UTC check:`, {
+      //   configTime: `${configHour}:${String(configMinute).padStart(2, '0')}`,
+      //   currentTime: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
+      //   matches: currentHour === configHour && currentMinute === configMinute
+      // });
       
       return currentHour === configHour && currentMinute === configMinute;
     }
