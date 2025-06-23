@@ -181,14 +181,16 @@ class Scheduler {
       console.error('❌ StandupService not available');
       return;
     }
-
+  
     try {
       const processed = await this.standupService.processExpiredStandups();
       if (processed > 0) {
         console.log(`✅ Processed ${processed} expired standup(s)`);
       }
+      return processed;
     } catch (error) {
       console.error('❌ Error processing expired standups:', error);
+      return 0;
     }
   }
 
@@ -200,14 +202,16 @@ class Scheduler {
       console.error('❌ StandupService not available');
       return;
     }
-
+  
     try {
       const processed = await this.standupService.processPendingReminders();
       if (processed > 0) {
         console.log(`📢 Processed ${processed} reminder(s)`);
       }
+      return processed;
     } catch (error) {
       console.error('❌ Error processing reminders:', error);
+      return 0;
     }
   }
 

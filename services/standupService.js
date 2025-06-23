@@ -284,6 +284,127 @@ async autoDisableChannel(teamId, channelId, reason = 'bot_removed') {
   }
 
   /**
+   * Central method for checking standup completion and managing reminders
+   * This is the SINGLE SOURCE OF TRUTH for standup completion decisions
+   */
+  async checkStandupCompletion(standupId, triggeredBy = 'response') {
+    try {
+      console.log(`🔍 Checking standup completion: ${standupId} (triggered by: ${triggeredBy})`);
+
+      const standup = await Standup.findById(standupId);
+      if (!standup) {
+        return { success: false, error: 'Standup not found' };
+      }
+
+      if (!standup.isActive()) {
+        return { 
+          success: true, 
+          action: 'none', 
+          reason: `Standup already ${standup.status}` 
+        };
+      }
+
+      // Check if all responses are received
+      const hasAllResponses = standup.hasAllResponses();
+      const isExpired = standup.isExpired();
+      
+      console.log(`📊 Standup ${standupId} status:`, {
+        hasAllResponses,
+        isExpired,
+        responses: `${standup.stats.totalResponded}/${standup.stats.totalExpected}`,
+        deadline: standup.responseDeadline.toISOString()
+      });
+
+      // Decision matrix
+      if (hasAllResponses) {
+        // ✅ All responses received - clear reminders and auto-complete
+        console.log(`✅ All responses received for standup ${standupId}, auto-completing...`);
+        
+        standup.clearReminders();
+        await standup.save();
+
+        // Auto-complete immediately when all responses are in
+        console.log(`🏁 Auto-completing standup ${standupId} (all responses received)`);
+        const completed = await this.completeStandup(standupId, 'auto_all_responses');
+        
+        return {
+          success: true,
+          action: 'completed',
+          reason: 'All responses received - auto-completed',
+          autoCompleted: completed
+        };
+
+      } else if (isExpired) {
+        // ⏰ Expired - complete regardless of response count
+        console.log(`⏰ Standup ${standupId} has expired, completing...`);
+        
+        const completed = await this.completeStandup(standupId, 'expired');
+        
+        return {
+          success: true,
+          action: 'completed',
+          reason: 'Standup expired',
+          autoCompleted: completed
+        };
+
+      } else {
+        // 🔄 Still active and not all responses - check reminder logic
+        const timeUntilDeadline = standup.responseDeadline - new Date();
+        const hoursLeft = timeUntilDeadline / (1000 * 60 * 60);
+
+        if (hoursLeft <= 0) {
+          // Deadline passed but not marked as expired yet
+          console.log(`⏰ Standup ${standupId} deadline passed, marking as expired`);
+          const completed = await this.completeStandup(standupId, 'expired');
+          
+          return {
+            success: true,
+            action: 'completed',
+            reason: 'Deadline passed',
+            autoCompleted: completed
+          };
+        }
+
+        // Check if we should schedule next reminder
+        const channel = await Channel.findByChannelId(standup.teamId, standup.channelId);
+        if (channel?.config?.enableReminders && !standup.reminders.nextReminderAt) {
+          // Schedule next reminder if none is scheduled
+          const nextReminderTime = new Date(Date.now() + channel.config.reminderInterval);
+          
+          if (nextReminderTime < standup.responseDeadline) {
+            standup.setNextReminder(nextReminderTime);
+            await standup.save();
+            
+            console.log(`📅 Scheduled next reminder for standup ${standupId} at ${nextReminderTime.toISOString()}`);
+            
+            return {
+              success: true,
+              action: 'reminder_scheduled',
+              reason: 'Waiting for more responses',
+              nextReminderAt: nextReminderTime
+            };
+          }
+        }
+
+        return {
+          success: true,
+          action: 'waiting',
+          reason: 'Waiting for more responses',
+          missingCount: standup.getMissingParticipants().length,
+          timeLeft: Math.round(hoursLeft * 100) / 100 // Round to 2 decimal places
+        };
+      }
+
+    } catch (error) {
+      console.error(`❌ Error checking standup completion for ${standupId}:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
    * Send reminder to users who haven't responded
    */
   async sendReminders(standupId) {
@@ -297,7 +418,7 @@ async autoDisableChannel(teamId, channelId, reason = 'bot_removed') {
         console.log(`✅ All responses already received for standup ${standupId}, clearing reminders`);
         
         // Clear future reminders
-        standup.setNextReminder(null);
+        standup.clearReminders();
         await standup.save();
         
         return false; // No reminders needed
@@ -308,7 +429,7 @@ async autoDisableChannel(teamId, channelId, reason = 'bot_removed') {
       if (missingParticipants.length === 0) {
         console.log(`✅ No missing participants for standup ${standupId}`);
         
-        standup.setNextReminder(null);
+        standup.clearReminders();
         await standup.save();
         
         return false;
@@ -351,7 +472,7 @@ async autoDisableChannel(teamId, channelId, reason = 'bot_removed') {
         if (nextReminderTime < standup.responseDeadline) {
           standup.setNextReminder(nextReminderTime);
         } else {
-          standup.setNextReminder(null); // No more reminders needed
+          standup.clearReminders(); // No more reminders needed
         }
       }
 
