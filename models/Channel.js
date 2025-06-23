@@ -171,18 +171,63 @@ class Channel {
     this.updatedAt = new Date();
   }
 
+  // Helper method to parse config time
+  parseConfigTime() {
+    const configTime = this.config.time.split(':');
+    return {
+      hour: parseInt(configTime[0]),
+      minute: parseInt(configTime[1])
+    };
+  }
+
   // Helper methods
   isTimeForStandup(currentTime) {
-    // This is a simplified version - you might want to use a proper timezone library
-    const configTime = this.config.time.split(':');
-    const configHour = parseInt(configTime[0]);
-    const configMinute = parseInt(configTime[1]);
-    
-    const now = new Date(currentTime);
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    
-    return currentHour === configHour && currentMinute === configMinute;
+    try {
+      const { hour: configHour, minute: configMinute } = this.parseConfigTime();
+      
+      const channelTimezone = this.config.timezone || 'UTC';
+      const now = new Date(currentTime);
+      
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: channelTimezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      const parts = formatter.formatToParts(now);
+      const currentHour = parseInt(parts.find(p => p.type === 'hour').value);
+      const currentMinute = parseInt(parts.find(p => p.type === 'minute').value);
+      
+      console.log(`🕐 Channel ${this.channelId} time check:`, {
+        configTime: `${configHour}:${String(configMinute).padStart(2, '0')}`,
+        timezone: channelTimezone,
+        currentTimeUTC: now.toISOString(),
+        currentTimeInTZ: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
+        currentHour,
+        currentMinute,
+        matches: currentHour === configHour && currentMinute === configMinute
+      });
+      
+      return currentHour === configHour && currentMinute === configMinute;
+      
+    } catch (error) {
+      console.error('Error in isTimeForStandup:', error);
+      // Fallback to UTC if timezone conversion fails
+      const { hour: configHour, minute: configMinute } = this.parseConfigTime();
+      
+      const now = new Date(currentTime);
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      
+      console.log(`🕐 Channel ${this.channelId} fallback UTC check:`, {
+        configTime: `${configHour}:${String(configMinute).padStart(2, '0')}`,
+        currentTime: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
+        matches: currentHour === configHour && currentMinute === configMinute
+      });
+      
+      return currentHour === configHour && currentMinute === configMinute;
+    }
   }
 
   getParticipants() {
