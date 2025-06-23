@@ -2,6 +2,7 @@ const SlackService = require('../services/slackService');
 const StandupService = require('../services/standupService');
 const Channel = require('../models/Channel');
 const Standup = require('../models/Standup');
+const timezoneHelper = require('../utils/timezoneHelper');
 const { 
   MESSAGES, 
   BLOCK_IDS, 
@@ -414,20 +415,18 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
   let defaultTimezone;
   
   if (isUpdate) {
-    // When UPDATE - use existing channel configuration
-    defaultTimezone = config.timezone || userTimezone || 'UTC';
+    defaultTimezone = timezoneHelper.findTimezoneOrFallback(
+      config.timezone || userTimezone
+    );
   } else {
-    // When CREATE - ALWAYS use auto-detected user timezone
-    defaultTimezone = userTimezone || 'UTC';
+    defaultTimezone = timezoneHelper.findTimezoneOrFallback(userTimezone);
   }
   
-  const supportedTimezone = TIMEZONES.find(tz => tz.value === defaultTimezone);
-  const selectedTimezone = supportedTimezone ? defaultTimezone : 'UTC';
 
   // ✅ Correct message
   const timezoneHint = isUpdate 
-    ? `Current timezone: *${selectedTimezone}*`
-    : `Auto-detected timezone: *${selectedTimezone}* ${selectedTimezone !== userTimezone ? '(adjusted to supported timezone)' : ''}`;
+  ? `Current timezone: *${timezoneHelper.getTimezoneLabel(defaultTimezone)}*`
+  : `Auto-detected timezone: *${timezoneHelper.getTimezoneLabel(defaultTimezone)}*`;
 
   return  {
     type: 'modal',
@@ -582,9 +581,9 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
           initial_option: {
             text: {
               type: 'plain_text',
-              text: TIMEZONES.find(tz => tz.value === selectedTimezone)?.label || 'UTC'
+              text: timezoneHelper.getTimezoneLabel(defaultTimezone)
             },
-            value: selectedTimezone // ✅ Use correct timezone!
+            value: defaultTimezone // ✅ Use correct timezone!
           },
           options: TIMEZONES.map(tz => ({
             text: {
