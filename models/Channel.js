@@ -173,16 +173,47 @@ class Channel {
 
   // Helper methods
   isTimeForStandup(currentTime) {
-    // This is a simplified version - you might want to use a proper timezone library
-    const configTime = this.config.time.split(':');
-    const configHour = parseInt(configTime[0]);
-    const configMinute = parseInt(configTime[1]);
-    
-    const now = new Date(currentTime);
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    
-    return currentHour === configHour && currentMinute === configMinute;
+    try {
+      const configTime = this.config.time.split(':');
+      const configHour = parseInt(configTime[0]);
+      const configMinute = parseInt(configTime[1]);
+      
+      
+      const channelTimezone = this.config.timezone || 'UTC';
+      const now = new Date(currentTime);
+      
+      const timeInChannelTZ = new Date(now.toLocaleString('en-US', {
+        timeZone: channelTimezone
+      }));
+      
+      const currentHour = timeInChannelTZ.getHours();
+      const currentMinute = timeInChannelTZ.getMinutes();
+      
+      console.log(`🕐 Channel ${this.channelId} time check:`, {
+        configTime: `${configHour}:${String(configMinute).padStart(2, '0')}`,
+        timezone: channelTimezone,
+        currentTimeUTC: now.toISOString(),
+        currentTimeInTZ: timeInChannelTZ.toLocaleString(),
+        currentHour,
+        currentMinute,
+        matches: currentHour === configHour && currentMinute === configMinute
+      });
+      
+      return currentHour === configHour && currentMinute === configMinute;
+      
+    } catch (error) {
+      console.error('Error in isTimeForStandup:', error);
+      // Fallback to UTC if timezone conversion fails
+      const configTime = this.config.time.split(':');
+      const configHour = parseInt(configTime[0]);
+      const configMinute = parseInt(configTime[1]);
+      
+      const now = new Date(currentTime);
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      
+      return currentHour === configHour && currentMinute === configMinute;
+    }
   }
 
   getParticipants() {
