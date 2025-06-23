@@ -114,7 +114,7 @@ class Scheduler {
   
       for (const channel of channels) {
         try {
-          // ✅ Используем метод канала для проверки времени (он учитывает таймзону!)
+          // ✅ Use channel method to check time (it considers timezone!)
           if (channel.isTimeForStandup(now)) {
             console.log(`🕒 Time to start standup for channel ${channel.channelId}`);
             
