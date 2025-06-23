@@ -1,30 +1,24 @@
 class TimezoneHelper {
     constructor() {
-      // Popular timezones for UI (priority list)
+      // Popular timezones for UI (TOP 10 ONLY)
       this.popularTimezones = [
         'UTC',
         'Europe/Warsaw',
         'Europe/London', 
         'Europe/Berlin',
-        'Europe/Paris',
-        'Europe/Rome',
-        'Europe/Kyiv',
         'America/New_York',
-        'America/Chicago',
-        'America/Denver',
         'America/Los_Angeles',
-        'America/Toronto',
         'Asia/Tokyo',
         'Asia/Shanghai',
-        'Asia/Singapore',
-        'Australia/Sydney'
+        'Australia/Sydney',
+        'America/Toronto'
       ];
-  
+
       // Cache for performance
       this._timezoneListCache = null;
       this._allTimezonesCache = null;
     }
-  
+
     /**
      * Get all available system timezones
      */
@@ -32,7 +26,7 @@ class TimezoneHelper {
       if (this._allTimezonesCache) {
         return this._allTimezonesCache;
       }
-  
+
       try {
         // Node 18+ built-in function
         if (typeof Intl.supportedValuesOf === 'function') {
@@ -42,12 +36,12 @@ class TimezoneHelper {
       } catch (error) {
         console.warn('Intl.supportedValuesOf not available:', error.message);
       }
-  
+
       // Fallback: return popular timezones
       this._allTimezonesCache = this.popularTimezones;
       return this._allTimezonesCache;
     }
-  
+
     /**
      * Check if timezone is valid
      */
@@ -62,7 +56,7 @@ class TimezoneHelper {
         return false;
       }
     }
-  
+
     /**
      * Get a nice timezone name
      */
@@ -72,7 +66,7 @@ class TimezoneHelper {
       if (timezone === 'UTC') {
         return 'UTC (Coordinated Universal Time)';
       }
-  
+
       try {
         // Get city name
         const city = timezone.split('/').pop()?.replace(/_/g, ' ') || timezone;
@@ -102,7 +96,7 @@ class TimezoneHelper {
         return timezone.replace(/_/g, ' ');
       }
     }
-  
+
     /**
      * Get UTC offset of timezone
      */
@@ -110,12 +104,30 @@ class TimezoneHelper {
       try {
         const now = new Date();
         
-        // Create dates in UTC and in the desired timezone
-        const utcTime = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
-        const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+        // Get the timezone offset using a more reliable method
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: timezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          timeZoneName: 'longOffset'
+        });
         
-        // Calculate the difference in minutes
-        const offsetMinutes = (localTime.getTime() - utcTime.getTime()) / (1000 * 60);
+        const parts = formatter.formatToParts(now);
+        const offsetString = parts.find(part => part.type === 'timeZoneName')?.value;
+        
+        if (offsetString && offsetString.startsWith('GMT')) {
+          // Extract the offset part (e.g., "GMT+02:00" -> "+02:00")
+          const offset = offsetString.replace('GMT', 'UTC');
+          return offset === 'UTC' ? 'UTC+00:00' : offset;
+        }
+        
+        // Fallback to manual calculation if needed
+        const offsetMinutes = now.getTimezoneOffset() -
+          new Date(now.toLocaleString('sv-SE', { timeZone: timezone })).getTimezoneOffset();
         
         // Format in ±HH:MM
         const hours = Math.floor(Math.abs(offsetMinutes) / 60);
@@ -127,7 +139,7 @@ class TimezoneHelper {
         return '';
       }
     }
-  
+
     /**
      * Find timezone or return best alternative
      */
@@ -138,26 +150,23 @@ class TimezoneHelper {
       if (this.isValidTimezone(timezone)) {
         return timezone;
       }
-  
+
       console.warn(`Timezone '${timezone}' not supported, searching for alternatives...`);
-  
-      // Search for alternatives by region and city
-      const allTimezones = this.getAllSystemTimezones();
+
+      // Search for alternatives from popular timezones only
+      const regionMatches = this.popularTimezones.filter(tz => {
+        const region = timezone.split('/')[0];
+        return tz.startsWith(region + '/') && this.isValidTimezone(tz);
+      });
       
-      // Search by region (Europe, America, etc.)
-      const region = timezone.split('/')[0];
-      const regionMatch = allTimezones.find(tz => 
-        tz.startsWith(region + '/') && this.isValidTimezone(tz)
-      );
-      
-      if (regionMatch) {
-        console.log(`Found region alternative: ${regionMatch}`);
-        return regionMatch;
+      if (regionMatches.length > 0) {
+        console.log(`Found region alternative: ${regionMatches[0]}`);
+        return regionMatches[0];
       }
-  
-      // Search by city
+
+      // Search by city from popular timezones
       const city = timezone.split('/').pop();
-      const cityMatch = allTimezones.find(tz => 
+      const cityMatch = this.popularTimezones.find(tz => 
         tz.includes(city) && this.isValidTimezone(tz)
       );
       
@@ -165,46 +174,33 @@ class TimezoneHelper {
         console.log(`Found city alternative: ${cityMatch}`);
         return cityMatch;
       }
-  
+
       // Last fallback
       console.warn(`No alternative found for '${timezone}', using UTC`);
       return 'UTC';
     }
-  
+
     /**
-     * Create a list of timezones for UI (sorted and formatted)
+     * Create a list of timezones for UI (LIMITED TO POPULAR ONES FOR SLACK)
      */
     createTimezoneList() {
       if (this._timezoneListCache) {
         return this._timezoneListCache;
       }
-  
-      const allTimezones = this.getAllSystemTimezones();
+
+      // ✅ ONLY use popular timezones to stay under Slack's 100 option limit
+      const validTimezones = this.popularTimezones.filter(tz => this.isValidTimezone(tz));
       
-      // Filter only valid timezones
-      const validTimezones = allTimezones.filter(tz => this.isValidTimezone(tz));
+      console.log(`📍 Using ${validTimezones.length} timezones for UI (TOP 10 only)`);
       
-      // Prioritize popular timezones
-      const prioritizedTimezones = [
-        // First popular (if valid)
-        ...this.popularTimezones.filter(tz => validTimezones.includes(tz)),
-        // Then the rest (sorted)
-        ...validTimezones
-          .filter(tz => !this.popularTimezones.includes(tz))
-          .sort()
-      ];
-  
-      // Remove duplicates and format
-      const uniqueTimezones = [...new Set(prioritizedTimezones)];
-      
-      this._timezoneListCache = uniqueTimezones.map(tz => ({
+      this._timezoneListCache = validTimezones.map(tz => ({
         value: tz,
         label: this.getTimezoneLabel(tz)
       }));
-  
+
       return this._timezoneListCache;
     }
-  
+
     /**
      * Clear cache (for testing or updating)
      */
@@ -212,9 +208,9 @@ class TimezoneHelper {
       this._timezoneListCache = null;
       this._allTimezonesCache = null;
     }
-  }
-  
-  // Singleton instance
-  const timezoneHelper = new TimezoneHelper();
-  
-  module.exports = timezoneHelper;
+}
+
+// Singleton instance
+const timezoneHelper = new TimezoneHelper();
+
+module.exports = timezoneHelper;
