@@ -1,0 +1,220 @@
+class TimezoneHelper {
+    constructor() {
+      // Popular timezones for UI (priority list)
+      this.popularTimezones = [
+        'UTC',
+        'Europe/Warsaw',
+        'Europe/London', 
+        'Europe/Berlin',
+        'Europe/Paris',
+        'Europe/Rome',
+        'Europe/Kyiv',
+        'America/New_York',
+        'America/Chicago',
+        'America/Denver',
+        'America/Los_Angeles',
+        'America/Toronto',
+        'Asia/Tokyo',
+        'Asia/Shanghai',
+        'Asia/Singapore',
+        'Australia/Sydney'
+      ];
+  
+      // Cache for performance
+      this._timezoneListCache = null;
+      this._allTimezonesCache = null;
+    }
+  
+    /**
+     * Get all available system timezones
+     */
+    getAllSystemTimezones() {
+      if (this._allTimezonesCache) {
+        return this._allTimezonesCache;
+      }
+  
+      try {
+        // Node 18+ built-in function
+        if (typeof Intl.supportedValuesOf === 'function') {
+          this._allTimezonesCache = Intl.supportedValuesOf('timeZone');
+          return this._allTimezonesCache;
+        }
+      } catch (error) {
+        console.warn('Intl.supportedValuesOf not available:', error.message);
+      }
+  
+      // Fallback: return popular timezones
+      this._allTimezonesCache = this.popularTimezones;
+      return this._allTimezonesCache;
+    }
+  
+    /**
+     * Check if timezone is valid
+     */
+    isValidTimezone(timezone) {
+      if (!timezone) return false;
+      
+      try {
+        // Quick way to check timezone support
+        new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  
+    /**
+     * Get a nice timezone name
+     */
+    getTimezoneLabel(timezone) {
+      if (!timezone) return 'Unknown Timezone';
+      
+      if (timezone === 'UTC') {
+        return 'UTC (Coordinated Universal Time)';
+      }
+  
+      try {
+        // Get city name
+        const city = timezone.split('/').pop()?.replace(/_/g, ' ') || timezone;
+        
+        // Get offset
+        const offset = this.getTimezoneOffset(timezone);
+        
+        // Get short name (e.g. CET, EST)
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: timezone,
+          timeZoneName: 'short'
+        });
+        
+        const parts = formatter.formatToParts(now);
+        const shortName = parts.find(part => part.type === 'timeZoneName')?.value;
+        
+        if (shortName && shortName !== timezone) {
+          return `${shortName} (${city}) ${offset}`;
+        }
+        
+        // Fallback if we couldn't get a short name
+        return `${city} ${offset}`;
+        
+      } catch (error) {
+        // Last fallback
+        return timezone.replace(/_/g, ' ');
+      }
+    }
+  
+    /**
+     * Get UTC offset of timezone
+     */
+    getTimezoneOffset(timezone) {
+      try {
+        const now = new Date();
+        
+        // Create dates in UTC and in the desired timezone
+        const utcTime = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+        const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+        
+        // Calculate the difference in minutes
+        const offsetMinutes = (localTime.getTime() - utcTime.getTime()) / (1000 * 60);
+        
+        // Format in ±HH:MM
+        const hours = Math.floor(Math.abs(offsetMinutes) / 60);
+        const minutes = Math.abs(offsetMinutes) % 60;
+        const sign = offsetMinutes >= 0 ? '+' : '-';
+        
+        return `UTC${sign}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      } catch {
+        return '';
+      }
+    }
+  
+    /**
+     * Find timezone or return best alternative
+     */
+    findTimezoneOrFallback(timezone) {
+      if (!timezone) return 'UTC';
+      
+      // Check validity directly
+      if (this.isValidTimezone(timezone)) {
+        return timezone;
+      }
+  
+      console.warn(`Timezone '${timezone}' not supported, searching for alternatives...`);
+  
+      // Search for alternatives by region and city
+      const allTimezones = this.getAllSystemTimezones();
+      
+      // Search by region (Europe, America, etc.)
+      const region = timezone.split('/')[0];
+      const regionMatch = allTimezones.find(tz => 
+        tz.startsWith(region + '/') && this.isValidTimezone(tz)
+      );
+      
+      if (regionMatch) {
+        console.log(`Found region alternative: ${regionMatch}`);
+        return regionMatch;
+      }
+  
+      // Search by city
+      const city = timezone.split('/').pop();
+      const cityMatch = allTimezones.find(tz => 
+        tz.includes(city) && this.isValidTimezone(tz)
+      );
+      
+      if (cityMatch) {
+        console.log(`Found city alternative: ${cityMatch}`);
+        return cityMatch;
+      }
+  
+      // Last fallback
+      console.warn(`No alternative found for '${timezone}', using UTC`);
+      return 'UTC';
+    }
+  
+    /**
+     * Create a list of timezones for UI (sorted and formatted)
+     */
+    createTimezoneList() {
+      if (this._timezoneListCache) {
+        return this._timezoneListCache;
+      }
+  
+      const allTimezones = this.getAllSystemTimezones();
+      
+      // Filter only valid timezones
+      const validTimezones = allTimezones.filter(tz => this.isValidTimezone(tz));
+      
+      // Prioritize popular timezones
+      const prioritizedTimezones = [
+        // First popular (if valid)
+        ...this.popularTimezones.filter(tz => validTimezones.includes(tz)),
+        // Then the rest (sorted)
+        ...validTimezones
+          .filter(tz => !this.popularTimezones.includes(tz))
+          .sort()
+      ];
+  
+      // Remove duplicates and format
+      const uniqueTimezones = [...new Set(prioritizedTimezones)];
+      
+      this._timezoneListCache = uniqueTimezones.map(tz => ({
+        value: tz,
+        label: this.getTimezoneLabel(tz)
+      }));
+  
+      return this._timezoneListCache;
+    }
+  
+    /**
+     * Clear cache (for testing or updating)
+     */
+    clearCache() {
+      this._timezoneListCache = null;
+      this._allTimezonesCache = null;
+    }
+  }
+  
+  // Singleton instance
+  const timezoneHelper = new TimezoneHelper();
+  
+  module.exports = timezoneHelper;

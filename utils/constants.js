@@ -1,4 +1,5 @@
 // Default standup questions
+const timezoneHelper = require('./timezoneHelper');
 const DEFAULT_STANDUP_QUESTIONS = [
     "What did you accomplish yesterday?",
     "What are you working on today?",
@@ -88,18 +89,7 @@ const DEFAULT_STANDUP_QUESTIONS = [
   };
   
   // Time zones (common ones)
-  const TIMEZONES = [
-    { value: 'UTC', label: 'UTC (Coordinated Universal Time)' },
-    { value: 'America/New_York', label: 'EST/EDT (Eastern Time)' },
-    { value: 'America/Chicago', label: 'CST/CDT (Central Time)' },
-    { value: 'America/Denver', label: 'MST/MDT (Mountain Time)' },
-    { value: 'America/Los_Angeles', label: 'PST/PDT (Pacific Time)' },
-    { value: 'Europe/London', label: 'GMT/BST (London)' },
-    { value: 'Europe/Berlin', label: 'CET/CEST (Berlin)' },
-    { value: 'Asia/Tokyo', label: 'JST (Tokyo)' },
-    { value: 'Asia/Shanghai', label: 'CST (Shanghai)' },
-    { value: 'Australia/Sydney', label: 'AEST/AEDT (Sydney)' }
-  ];
+  const TIMEZONES = timezoneHelper.createTimezoneList();
   
   // Time options for standup (24-hour format)
   const TIME_OPTIONS = [];
