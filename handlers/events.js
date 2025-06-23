@@ -92,6 +92,17 @@ function register(app) {
 
       console.log(`Standup response ${existingResponse ? 'updated' : 'received'} from ${userInfo.name}`);
 
+      const freshStandup = await Standup.findById(standup._id);
+      if (freshStandup && freshStandup.hasAllResponses()) {
+        console.log(`🎯 All responses received for standup ${standup._id}, clearing future reminders`);
+        
+        // Clear future reminders
+        freshStandup.setNextReminder(null);
+        await freshStandup.save();
+        
+        console.log(`✅ Future reminders cleared for standup ${standup._id}`);
+      }
+
     } catch (error) {
       console.error('Error handling message event:', error);
     }

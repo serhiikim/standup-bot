@@ -293,10 +293,25 @@ async autoDisableChannel(teamId, channelId, reason = 'bot_removed') {
         return false;
       }
 
+      if (standup.hasAllResponses()) {
+        console.log(`✅ All responses already received for standup ${standupId}, clearing reminders`);
+        
+        // Clear future reminders
+        standup.setNextReminder(null);
+        await standup.save();
+        
+        return false; // No reminders needed
+      }
+
       // Get users who haven't responded yet
       const missingParticipants = standup.getMissingParticipants();
       if (missingParticipants.length === 0) {
-        return false; // Everyone has responded
+        console.log(`✅ No missing participants for standup ${standupId}`);
+        
+        standup.setNextReminder(null);
+        await standup.save();
+        
+        return false;
       }
 
       // Get user info for mentions
