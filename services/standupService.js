@@ -418,7 +418,7 @@ async autoDisableChannel(teamId, channelId, reason = 'bot_removed') {
         console.log(`✅ All responses already received for standup ${standupId}, clearing reminders`);
         
         // Clear future reminders
-        standup.setNextReminder(null);
+        standup.clearReminders();
         await standup.save();
         
         return false; // No reminders needed
@@ -429,7 +429,7 @@ async autoDisableChannel(teamId, channelId, reason = 'bot_removed') {
       if (missingParticipants.length === 0) {
         console.log(`✅ No missing participants for standup ${standupId}`);
         
-        standup.setNextReminder(null);
+        standup.clearReminders();
         await standup.save();
         
         return false;
@@ -472,7 +472,7 @@ async autoDisableChannel(teamId, channelId, reason = 'bot_removed') {
         if (nextReminderTime < standup.responseDeadline) {
           standup.setNextReminder(nextReminderTime);
         } else {
-          standup.setNextReminder(null); // No more reminders needed
+          standup.clearReminders(); // No more reminders needed
         }
       }
 
