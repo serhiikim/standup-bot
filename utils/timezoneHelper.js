@@ -110,12 +110,30 @@ class TimezoneHelper {
       try {
         const now = new Date();
         
-        // Create dates in UTC and in the desired timezone
-        const utcTime = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
-        const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+        // Get the timezone offset using a more reliable method
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: timezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          timeZoneName: 'longOffset'
+        });
         
-        // Calculate the difference in minutes
-        const offsetMinutes = (localTime.getTime() - utcTime.getTime()) / (1000 * 60);
+        const parts = formatter.formatToParts(now);
+        const offsetString = parts.find(part => part.type === 'timeZoneName')?.value;
+        
+        if (offsetString && offsetString.startsWith('GMT')) {
+          // Extract the offset part (e.g., "GMT+02:00" -> "+02:00")
+          const offset = offsetString.replace('GMT', 'UTC');
+          return offset === 'UTC' ? 'UTC+00:00' : offset;
+        }
+        
+        // Fallback to manual calculation if needed
+        const offsetMinutes = now.getTimezoneOffset() -
+          new Date(now.toLocaleString('sv-SE', { timeZone: timezone })).getTimezoneOffset();
         
         // Format in ±HH:MM
         const hours = Math.floor(Math.abs(offsetMinutes) / 60);
