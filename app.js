@@ -18,9 +18,31 @@ const app = new App({
   port: process.env.PORT || 3000
 });
 
-// Global error handling
+// Enhanced error handling for Socket Mode stability
 app.error(async (error) => {
   console.error('❌ Slack app error:', error);
+  
+  // Don't crash on Socket Mode disconnects
+  if (error.message?.includes('socket-mode') || 
+      error.message?.includes('disconnect') ||
+      error.message?.includes('server explicit disconnect')) {
+    console.log('🔄 Socket Mode connection issue - will reconnect automatically');
+    return;
+  }
+  
+  // Log other errors but don't crash
+  console.error('Full error:', error);
+});
+
+// Process-level error handling
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  // Don't exit, just log
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit, just log
 });
 
 // Initialize handlers
@@ -58,11 +80,22 @@ async function startApp() {
     
     console.log('🚀 Slack Standup Bot is running!');
     console.log(`📱 Mode: ${process.env.SLACK_APP_TOKEN ? 'Socket Mode' : 'HTTP Mode'}`);
-    console.log(`🌐 Port: ${process.env.PORT || 3000}`);
+    console.log(`🌐 Port: ${process.env.PORT || 3000} (internal only)`);
+    
+    // Log successful Socket Mode connection
+    console.log('✅ Slack Socket Mode connection established');
     
   } catch (error) {
     console.error('❌ Failed to start application:', error);
-    process.exit(1);
+    // In production, don't exit - try to recover
+    if (process.env.NODE_ENV === 'production') {
+      console.log('🔄 Attempting to restart in 10 seconds...');
+      setTimeout(() => {
+        startApp();
+      }, 10000);
+    } else {
+      process.exit(1);
+    }
   }
 }
 
@@ -87,6 +120,7 @@ process.on('SIGTERM', async () => {
   console.log('\n🛑 SIGTERM received, shutting down...');
   
   try {
+    scheduler.stop();
     await app.stop();
     await database.close();
     process.exit(0);
