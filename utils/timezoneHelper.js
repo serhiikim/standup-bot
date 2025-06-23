@@ -153,26 +153,47 @@ class TimezoneHelper {
 
       console.warn(`Timezone '${timezone}' not supported, searching for alternatives...`);
 
-      // Search for alternatives from popular timezones only
-      const regionMatches = this.popularTimezones.filter(tz => {
-        const region = timezone.split('/')[0];
-        return tz.startsWith(region + '/') && this.isValidTimezone(tz);
-      });
+      // First: Search in popular timezones
+      const region = timezone.split('/')[0];
+      const city = timezone.split('/').pop();
       
-      if (regionMatches.length > 0) {
-        console.log(`Found region alternative: ${regionMatches[0]}`);
-        return regionMatches[0];
+      const popularRegionMatches = this.popularTimezones.filter(tz => 
+        tz.startsWith(region + '/') && this.isValidTimezone(tz)
+      );
+      
+      if (popularRegionMatches.length > 0) {
+        console.log(`Found popular region alternative: ${popularRegionMatches[0]}`);
+        return popularRegionMatches[0];
       }
 
-      // Search by city from popular timezones
-      const city = timezone.split('/').pop();
-      const cityMatch = this.popularTimezones.find(tz => 
+      const popularCityMatch = this.popularTimezones.find(tz => 
         tz.includes(city) && this.isValidTimezone(tz)
       );
       
-      if (cityMatch) {
-        console.log(`Found city alternative: ${cityMatch}`);
-        return cityMatch;
+      if (popularCityMatch) {
+        console.log(`Found popular city alternative: ${popularCityMatch}`);
+        return popularCityMatch;
+      }
+
+      // Second: Search in all system timezones as fallback
+      const allTimezones = this.getAllSystemTimezones();
+      
+      const systemRegionMatches = allTimezones.filter(tz => 
+        tz.startsWith(region + '/') && this.isValidTimezone(tz)
+      );
+      
+      if (systemRegionMatches.length > 0) {
+        console.log(`Found system region alternative: ${systemRegionMatches[0]}`);
+        return systemRegionMatches[0];
+      }
+
+      const systemCityMatch = allTimezones.find(tz => 
+        tz.includes(city) && this.isValidTimezone(tz)
+      );
+      
+      if (systemCityMatch) {
+        console.log(`Found system city alternative: ${systemCityMatch}`);
+        return systemCityMatch;
       }
 
       // Last fallback
