@@ -1,4 +1,5 @@
 const StandupService = require('../../services/standupService');
+const UserStatusService = require('../../services/userStatusService');
 const Channel = require('../../models/Channel');
 const { MESSAGES, DAY_OPTIONS } = require('../../utils/constants');
 const { isDMChannel, getUserPendingStandups } = require('../../utils/channelHelpers');
@@ -8,7 +9,8 @@ const SlackService = require('../../services/slackService');
 function register(app) {
   const standupService = new StandupService(app);
   const slackService = new SlackService(app);
-  // /standup-status command
+  const userStatusService = new UserStatusService(app);
+
   app.command('/standup-status', async ({ command, ack, respond }) => {
     await ack();
 
@@ -23,7 +25,6 @@ function register(app) {
         
         let statusText = `👤 *Your Standup Status*\n\n`;
         
-        // Pending responses section
         if (pendingStandups.length > 0) {
           statusText += `⏰ *Pending Responses (${pendingStandups.length}):*\n`;
           
@@ -45,15 +46,13 @@ function register(app) {
               statusText += `   📝 ${standup.questions.length} questions\n\n`;
             } catch (error) {
               console.warn(`Could not fetch channel info for ${standup.channelId}:`, error.message);
-              statusText += `🔄 *Unknown channel*\n`;
-              statusText += `   ⏱️ Please check the channel\n\n`;
+              statusText += `🔄 *Unknown channel*\n   ⏱️ Please check the channel\n\n`;
             }
           }
         } else {
           statusText += `✅ *No pending responses!*\n\n`;
         }
 
-        // Recent activity section
         if (recentResponses.length > 0) {
           statusText += `📋 *Recent Activity (Last 5):*\n`;
           recentResponses.forEach(response => {
@@ -66,7 +65,6 @@ function register(app) {
           statusText += `\n`;
         }
 
-        // Helpful tips
         statusText += `💡 *Tips:*\n`;
         statusText += `• Use \`/standup-status\` in channels for team info\n`;
         statusText += `• Reply to standup threads to submit responses\n`;
@@ -80,13 +78,9 @@ function register(app) {
 
       console.log(`📊 Status command received for channel ${channel_id}`);
 
-      // Get comprehensive status
       const status = await standupService.getChannelStatus(team_id, channel_id);
       
       if (!status) {
-        console.log(`❌ No status found for channel ${channel_id}`);
-        
-        // Check if channel exists but is inactive
         const channel = await Channel.findByChannelId(team_id, channel_id);
         
         if (channel) {
@@ -106,10 +100,49 @@ function register(app) {
 
       const { channel, activeStandups, recentStandups } = status;
       
-      // Build status message
+      let oooInfo = null;
+      try {
+        let participantIds;
+        if (channel.hasSpecificParticipants()) {
+          participantIds = channel.getParticipants();
+        } else {
+          const members = await slackService.getChannelMembers(channel_id);
+          participantIds = members.filter(member => !member.startsWith('B'));
+          const users = await slackService.getUsersInfo(participantIds);
+          participantIds = users
+            .filter(user => user && !user.deleted && !user.is_bot && user.id !== 'USLACKBOT')
+            .map(user => user.id);
+        }
+        
+        if (participantIds.length > 0) {
+          oooInfo = await userStatusService.filterAvailableParticipants(participantIds);
+          console.log(`👥 Team status: ${oooInfo.availableCount}/${oooInfo.originalCount} available`);
+        }
+      } catch (error) {
+        console.warn('Could not check team OOO status:', error);
+      }
+      
       let statusText = `📊 *Standup Status for #${channel.channelName}*\n\n`;
       
-      // Configuration info
+      if (oooInfo) {
+        const availablePercent = Math.round((oooInfo.availableCount / oooInfo.originalCount) * 100);
+        statusText += `👥 *Team Availability:* ${oooInfo.availableCount}/${oooInfo.originalCount} available (${availablePercent}%)\n`;
+        
+        if (oooInfo.oooCount > 0) {
+          statusText += `📴 *Out of Office:* ${oooInfo.oooCount} team member(s)\n`;
+          
+          if (oooInfo.oooUsers.length <= 5) {
+            oooInfo.oooUsers.forEach(oooUser => {
+              const userName = oooUser.user?.displayName || `<@${oooUser.userId}>`;
+              statusText += `   • ${userName} - ${oooUser.reason}\n`;
+            });
+          } else {
+            statusText += `   • See details below\n`;
+          }
+        }
+        statusText += `\n`;
+      }
+      
       statusText += `⚙️ *Configuration:*\n`;
       statusText += `• Time: ${channel.config.time} (${channel.config.timezone})\n`;
       statusText += `• Days: ${channel.config.days.map(day => DAY_OPTIONS.find(d => d.value === day)?.label).join(', ')}\n`;
@@ -117,29 +150,37 @@ function register(app) {
       statusText += `• Questions: ${channel.config.questions.length}\n`;
       statusText += `• Participants: ${channel.config.participants.length > 0 ? `${channel.config.participants.length} specific users` : 'All channel members'}\n\n`;
 
-      // Active standup info
       if (activeStandups.length > 0) {
         const activeStandup = activeStandups[0];
         statusText += `🔄 *Active Standup:*\n`;
         statusText += `• Started: ${activeStandup.startedAt.toLocaleString()}\n`;
         statusText += `• Responses: ${activeStandup.stats.totalResponded}/${activeStandup.stats.totalExpected}\n`;
         statusText += `• Response Rate: ${activeStandup.getResponseRate()}%\n`;
-        statusText += `• Deadline: ${activeStandup.responseDeadline.toLocaleString()}\n\n`;
+        statusText += `• Deadline: ${activeStandup.responseDeadline.toLocaleString()}\n`;
+        
+        if (activeStandup.oooInfo && activeStandup.oooInfo.oooCount > 0) {
+          statusText += `• Out of Office: ${activeStandup.oooInfo.oooCount} excluded from this standup\n`;
+        }
+        statusText += `\n`;
       } else {
-        statusText += `🔄 *Active Standup:* None\n\n`;
+        statusText += `🔄 *Active Standup:* None\n`;
+        
+        if (oooInfo && oooInfo.shouldSkipStandup) {
+          statusText += `⚠️ *Next standup may be skipped* - ${Math.round((oooInfo.oooCount / oooInfo.originalCount) * 100)}% of team is OOO\n`;
+        }
+        statusText += `\n`;
       }
 
-      // Statistics
       statusText += `📈 *Statistics:*\n`;
       statusText += `• Total Standups: ${channel.stats.totalStandups}\n`;
       statusText += `• Last Standup: ${channel.stats.lastStandupDate ? new Date(channel.stats.lastStandupDate).toLocaleDateString() : 'Never'}\n`;
       statusText += `• Avg Response Rate: ${Math.round(channel.stats.avgResponseRate)}%\n\n`;
 
-      // Recent standups
       if (recentStandups.length > 0) {
         statusText += `📋 *Recent Standups:*\n`;
         recentStandups.forEach(standup => {
-          statusText += `• ${standup.startedAt.toLocaleDateString()} - ${standup.status} (${standup.getResponseRate()}% responded)\n`;
+          const oooNote = standup.oooInfo && standup.oooInfo.oooCount > 0 ? ` (${standup.oooInfo.oooCount} OOO)` : '';
+          statusText += `• ${standup.startedAt.toLocaleDateString()} - ${standup.status} (${standup.getResponseRate()}% responded)${oooNote}\n`;
         });
       } else {
         statusText += `📋 *Recent Standups:* None\n`;
@@ -160,4 +201,4 @@ function register(app) {
   });
 }
 
-module.exports = { register }; 
+module.exports = { register };

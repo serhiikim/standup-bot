@@ -1,5 +1,7 @@
+
 const SlackService = require('./slackService');
 const LLMService = require('./llmService');
+const UserStatusService = require('./userStatusService');
 const Channel = require('../models/Channel');
 const Standup = require('../models/Standup');
 const { STANDUP_STATUS, DEFAULT_RESPONSE_TIMEOUT } = require('../utils/constants');
@@ -10,6 +12,7 @@ class StandupLifecycleService {
     this.slackService = slackService || new SlackService(app);
     this.messageBuilder = messageBuilder;
     this.llmService = LLMService.getInstance();
+    this.userStatusService = new UserStatusService(app);
   }
 
   async createStandup(teamId, channelId, createdBy = 'system', isManual = false) {
@@ -19,41 +22,87 @@ class StandupLifecycleService {
       if (!channel || !channel.isActive) {
         throw new Error('Channel not configured or inactive');
       }
+      
       const activeStandups = await Standup.findActiveByChannel(teamId, channelId);
       if (activeStandups.length > 0) {
         throw new Error('Standup already active in this channel');
       }
-      const participants = await this.getStandupParticipants(channelId, channel);
-      if (participants.length === 0) {
+      
+      const allParticipants = await this.getStandupParticipants(channelId, channel);
+      if (allParticipants.length === 0) {
         throw new Error('No participants found for standup');
       }
+
+      const participantIds = allParticipants.map(p => p.id);
+      const statusFilter = await this.userStatusService.filterAvailableParticipants(participantIds);
+      
+      console.log(`👥 Participant status: ${statusFilter.availableCount}/${statusFilter.originalCount} available, ${statusFilter.oooCount} OOO`);
+
+      if (statusFilter.shouldSkipStandup) {
+        console.log(`🏝️ Entire team is OOO (${statusFilter.oooCount}/${statusFilter.originalCount}), skipping standup`);
+        
+        await this.postOOONotification(channelId, statusFilter, channel);
+        
+        throw new Error('Standup skipped - entire team is out of office');
+      }
+
+      const availableParticipants = allParticipants.filter(p => 
+        statusFilter.participants.includes(p.id)
+      );
+
+      if (availableParticipants.length === 0) {
+        console.log(`👻 No available participants after OOO filtering`);
+        await this.postOOONotification(channelId, statusFilter, channel);
+        throw new Error('No available participants for standup');
+      }
+
       const responseDeadline = new Date(Date.now() + (channel.config.responseTimeout || DEFAULT_RESPONSE_TIMEOUT));
+      
       const standupData = {
         teamId,
         channelId,
         questions: [...channel.config.questions],
-        expectedParticipants: participants.map(p => p.id),
+        expectedParticipants: statusFilter.participants,
         scheduledDate: new Date(),
         responseDeadline,
         createdBy,
         isManual,
-        status: STANDUP_STATUS.ACTIVE
+        status: STANDUP_STATUS.ACTIVE,
+        oooInfo: {
+          totalOriginal: statusFilter.originalCount,
+          oooCount: statusFilter.oooCount,
+          oooUsers: statusFilter.oooUsers.map(u => ({
+            userId: u.userId,
+            reason: u.reason,
+            displayName: u.user?.displayName
+          }))
+        }
       };
+      
       const standup = await Standup.create(standupData);
       const standupInstance = new Standup(standup);
       
-      const standupMessage = this.messageBuilder.createStandupMessage(standupInstance, participants, channel);
+      const standupMessage = this.messageBuilder.createStandupMessage(
+        standupInstance, 
+        availableParticipants, 
+        channel,
+        statusFilter
+      );
+      
       try {
         const messageResult = await this.slackService.postMessage(
           channelId,
           standupMessage.text,
           standupMessage.blocks
         );
+        
         standupInstance.messageTs = messageResult.ts;
         standupInstance.threadTs = messageResult.ts;
         await standupInstance.save();
+        
         channel.incrementStandupCount();
         await channel.save();
+        
       } catch (postError) {
         if (this.isBotRemovedError(postError)) {
           console.log(`🤖 Bot removed from channel ${channelId}, auto-disabling standups`);
@@ -69,11 +118,30 @@ class StandupLifecycleService {
         standupInstance.setNextReminder(reminderTime);
         await standupInstance.save();
       }
-      console.log(`✅ Standup started successfully: ${standupInstance._id}`);
+      
+      console.log(`✅ Standup started successfully: ${standupInstance._id} (${availableParticipants.length} participants, ${statusFilter.oooCount} OOO)`);
       return standupInstance;
+      
     } catch (error) {
       console.error('Error starting standup:', error);
       throw error;
+    }
+  }
+
+  async postOOONotification(channelId, statusFilter, channel) {
+    try {
+      const message = this.messageBuilder.createOOONotificationMessage(statusFilter, channel);
+      
+      await this.slackService.postMessage(
+        channelId,
+        message.text,
+        message.blocks
+      );
+      
+      console.log(`📴 Posted OOO notification for channel ${channelId}`);
+      
+    } catch (error) {
+      console.error('Error posting OOO notification:', error);
     }
   }
 
@@ -173,4 +241,4 @@ class StandupLifecycleService {
   }
 }
 
-module.exports = StandupLifecycleService; 
+module.exports = StandupLifecycleService;
