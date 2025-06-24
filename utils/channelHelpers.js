@@ -14,35 +14,36 @@ function isDMChannel(channelId) {
    * @returns {Array} - Array of active standups where user hasn't responded
    */
   async function getUserPendingStandups(teamId, userId) {
+    const Standup = require('../models/Standup');
+    const Response = require('../models/Response');
+    
+    // Find active standups where user is expected to participate
+    let activeStandups;
     try {
-      const Standup = require('../models/Standup');
-      const Response = require('../models/Response');
-      
-      // Find active standups where user is expected to participate
-      const activeStandups = await Standup.getCollection().find({
+      activeStandups = await Standup.getCollection().find({
         teamId: teamId,
         status: { $in: ['active', 'collecting'] },
         expectedParticipants: userId
       }).toArray();
-  
-      const pendingStandups = [];
-      
-      for (const standupData of activeStandups) {
-        const standup = new (require('../models/Standup'))(standupData);
-        
-        // Check if user has already responded
-        const existingResponse = await Response.findByStandupAndUser(standup._id, userId);
-        
-        if (!existingResponse || !existingResponse.isComplete) {
-          pendingStandups.push(standup);
-        }
-      }
-      
-      return pendingStandups;
     } catch (error) {
-      console.error('Error getting user pending standups:', error);
-      return [];
+      console.error('Database error fetching active standups:', error);
+      throw new Error('Failed to fetch active standups');
     }
+  
+    const pendingStandups = [];
+    for (const standup of activeStandups) {
+      let existingResponse;
+      try {
+        existingResponse = await Response.findByStandupAndUser(standup._id, userId);
+      } catch (error) {
+        console.error('Database error fetching response:', error);
+        throw new Error('Failed to fetch user response');
+      }
+      if (!existingResponse || !existingResponse.isComplete) {
+        pendingStandups.push(standup); // Use plain data, no need to instantiate Standup
+      }
+    }
+    return pendingStandups;
   }
   
   module.exports = {

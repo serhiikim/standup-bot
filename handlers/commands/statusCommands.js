@@ -1,18 +1,19 @@
-
 const StandupService = require('../../services/standupService');
 const Channel = require('../../models/Channel');
 const { MESSAGES, DAY_OPTIONS } = require('../../utils/constants');
 const { isDMChannel, getUserPendingStandups } = require('../../utils/channelHelpers');
+const Response = require('../../models/Response');
+const SlackService = require('../../services/slackService');
 
 function register(app) {
   const standupService = new StandupService(app);
-
+  const slackService = new SlackService(app);
   // /standup-status command
   app.command('/standup-status', async ({ command, ack, respond }) => {
     await ack();
 
     try {
-      const { team_id, channel_id } = command;
+      const { team_id, channel_id, user_id } = command;
 
       if (isDMChannel(channel_id)) {
         console.log(`👤 Personal status command received from user ${user_id}`);
