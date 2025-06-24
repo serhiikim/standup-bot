@@ -1,11 +1,12 @@
 # Slack Standup Bot
 
-AI-powered Slack standup bot with intelligent response analysis and automated scheduling.
+AI-powered Slack standup bot with intelligent response analysis, automated scheduling, and smart out-of-office handling.
 
 ## Features
 
 - 🤖 **AI-Powered Analysis** - Uses OpenAI to analyze standup responses and generate insightful summaries
 - ⏰ **Automated Scheduling** - Configure standups to run automatically on specific days and times
+- 🏝️ **Smart OOO Handling** - Automatically detects out-of-office team members and adapts standups accordingly
 - 📊 **Smart Summaries** - Get AI-generated summaries highlighting achievements, blockers, and next steps
 - 🔔 **Intelligent Reminders** - Automatic reminders for team members who haven't responded
 - 👥 **Flexible Participation** - Include all channel members or specific participants
@@ -76,6 +77,7 @@ That's it! 🎉
    - reactions:write           # Add emoji reactions
    - team:read                 # View workspace info
    - users:read                # View people in workspace
+   - users.profile:read        # Read user profile info (for OOO status)
    ```
 
 3. **Set up App-Level Token** (for Socket Mode):
@@ -128,17 +130,61 @@ That's it! 🎉
 |---------|-------------|
 | `/standup-setup` | Open configuration modal for the current channel |
 | `/standup-start` | Manually start a standup (for testing) |
-| `/standup-status` | View current configuration and statistics |
+| `/standup-status` | View current configuration, stats, and team availability |
 | `/standup-complete` | Manually complete an active standup |
 | `/standup-remind` | Send reminders to users who haven't responded |
 
 ### How Standups Work
 
 1. **Automatic Start** - Bot posts standup questions at configured time
-2. **Team Responses** - Team members reply in the thread with their answers
-3. **Real-time Tracking** - Bot tracks responses and sends reminders
-4. **AI Analysis** - When complete, AI analyzes all responses
-5. **Smart Summary** - Bot posts a summary with insights and next steps
+2. **OOO Detection** - Bot checks team member statuses and excludes those out of office
+3. **Team Responses** - Available team members reply in the thread with their answers
+4. **Real-time Tracking** - Bot tracks responses and sends reminders
+5. **AI Analysis** - When complete, AI analyzes all responses
+6. **Smart Summary** - Bot posts a summary with insights and next steps
+
+## Out-of-Office (OOO) Features
+
+The bot intelligently handles team members who are out of office:
+
+### Automatic OOO Detection
+- **Status Text**: Recognizes keywords like "vacation", "sick", "pto", "out of office", "travel"
+- **Status Emojis**: Detects OOO emojis like 🏝️, ✈️, 🤒, 😴
+- **Time-based**: Respects temporary statuses with expiration times
+
+### Smart Standup Behavior
+- **Partial Team OOO**: Excludes OOO members and runs standup with available team
+- **Entire Team OOO**: Skips standup entirely and posts notification
+- **OOO Information**: Shows who's out and why in standup messages
+- **Automatic Resume**: Resumes normal standups when team returns
+
+### Examples
+
+**Partial Team Out:**
+```
+🚀 Daily Standup Started!
+@john @sarah
+
+📴 Out of Office (2):
+• Mike - vacation
+• Lisa - sick leave
+
+Please answer these questions...
+```
+
+**Entire Team Out:**
+```
+🏝️ Standup Skipped - Team Out of Office
+90% of the team is currently out of office.
+
+📴 Out of Office (3):
+• Mike - vacation  
+• Lisa - sick leave
+• John - travel
+
+🔄 Next scheduled standup: Monday at 09:00 (UTC)
+💡 Standup will resume automatically when team members return.
+```
 
 ## Management Commands
 
@@ -217,7 +263,8 @@ standup-bot/
 ├── services/               # Business logic services
 │   ├── standupService.js   # Core standup functionality
 │   ├── llmService.js      # AI analysis service
-│   └── slackService.js    # Slack API helpers
+│   ├── slackService.js    # Slack API helpers
+│   └── userStatusService.js # OOO detection and filtering
 ├── jobs/scheduler.js       # Automated scheduling system
 ├── scripts/                # Management scripts
 └── utils/constants.js      # Configuration constants
@@ -237,6 +284,15 @@ Customize up to 10 questions for your team. Default questions:
 - **Timezone**: Support for major timezones
 - **Response Window**: 3-hour default response deadline
 
+### OOO Detection
+The bot automatically recognizes these out-of-office indicators:
+
+**English Keywords:**
+- vacation, holiday, pto, sick, leave, travel, out of office, ooo, away, offline, absent
+
+**Common Emojis:**
+- 🏝️ 🌴 ✈️ 🏖️ 🤒 💊 🏥 😴 💤
+
 ### AI Features
 When OpenAI API key is configured, the bot provides:
 - **Intelligent Summaries** - Key points from all responses
@@ -254,11 +310,17 @@ The bot runs a scheduler that:
 - Sends reminders every 2 minutes
 - Cleans up old data daily
 
+### OOO-Aware Operations
+- **Smart Filtering**: Automatically excludes OOO team members
+- **Threshold Detection**: Skips standups when >90% of team is out
+- **Status Monitoring**: Continuously checks team availability
+- **Intelligent Notifications**: Clear communication about OOO situations
+
 ### Response Tracking
 - Real-time response validation
 - Edit tracking for updated responses
 - Response time analytics
-- Participation rate monitoring
+- Participation rate monitoring (excluding OOO members)
 
 ### Fallback Modes
 - Works without OpenAI API (basic summaries)
@@ -291,6 +353,11 @@ See [Installation](#installation) section for required environment variables.
 - Check timezone configuration
 - Verify scheduler is running
 - Review MongoDB connection with `./scripts/health.sh`
+
+**OOO detection not working:**
+- Ensure `users.profile:read` permission is granted
+- Check if team members have status text/emojis set
+- Verify user profiles are accessible to the bot
 
 **AI analysis not working:**
 - Verify OpenAI API key is set
