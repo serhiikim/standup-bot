@@ -1,3 +1,4 @@
+
 const { BLOCK_IDS } = require('../utils/constants');
 const SlackService = require('./slackService');
 
@@ -263,7 +264,9 @@ class StandupMessageBuilderService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `${oooPercentage}% of the team is currently out of office.`
+          text: oooCount === originalCount 
+            ? `Everyone is currently out of office! 🌴`
+            : `${oooPercentage}% of the team is currently out of office.`
         }
       }
     ];
@@ -289,17 +292,47 @@ class StandupMessageBuilderService {
     blocks.push(
       { type: 'divider' },
       {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `🔄 *Next scheduled standup:* ${this.getNextStandupTime(channel)}`
+        }
+      },
+      {
         type: 'context',
         elements: [
           {
             type: 'mrkdwn',
-            text: '🔄 Standup will resume automatically when team members return'
+            text: '💡 Standup will resume automatically when team members return'
           }
         ]
       }
     );
 
     return { text, blocks };
+  }
+
+  getNextStandupTime(channel) {
+    try {
+      const { time, days, timezone } = channel.config;
+      const [hour, minute] = time.split(':').map(Number);
+      
+      const now = new Date();
+      const currentDay = now.getDay();
+      
+      const sortedDays = [...days].sort((a, b) => a - b);
+      let nextDay = sortedDays.find(day => day > currentDay);
+      
+      if (!nextDay) {
+        nextDay = sortedDays[0];
+      }
+      
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      return `${dayNames[nextDay]} at ${time} (${timezone})`;
+      
+    } catch (error) {
+      return 'Next scheduled time';
+    }
   }
 }
 

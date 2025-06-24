@@ -68,7 +68,7 @@ class StandupLifecycleService {
         createdBy,
         isManual,
         status: STANDUP_STATUS.ACTIVE,
-        oooInfo: { 
+        oooInfo: {
           totalOriginal: statusFilter.originalCount,
           oooCount: statusFilter.oooCount,
           oooUsers: statusFilter.oooUsers.map(u => ({
@@ -130,57 +130,18 @@ class StandupLifecycleService {
 
   async postOOONotification(channelId, statusFilter, channel) {
     try {
-      const { oooCount, originalCount, oooSummary } = statusFilter;
+      const message = this.messageBuilder.createOOONotificationMessage(statusFilter, channel);
       
-      let notificationText = `🏝️ *Standup Skipped - Team Out of Office*\n\n`;
-      
-      if (oooCount === originalCount) {
-        notificationText += `Everyone is currently out of office! 🌴\n\n`;
-      } else {
-        const oooPercentage = Math.round((oooCount / originalCount) * 100);
-        notificationText += `${oooPercentage}% of the team is currently out of office.\n\n`;
-      }
-      
-      if (oooSummary) {
-        notificationText += oooSummary + '\n';
-      }
-      
-      notificationText += `🔄 *Next scheduled standup:* ${this.getNextStandupTime(channel)}\n`;
-      notificationText += `💡 Standup will resume automatically when team members return.`;
-
       await this.slackService.postMessage(
         channelId,
-        notificationText
+        message.text,
+        message.blocks
       );
       
       console.log(`📴 Posted OOO notification for channel ${channelId}`);
       
     } catch (error) {
       console.error('Error posting OOO notification:', error);
-    }
-  }
-
-  getNextStandupTime(channel) {
-    try {
-      const { time, days, timezone } = channel.config;
-      const [hour, minute] = time.split(':').map(Number); 
-      
-      const now = new Date();
-      const currentDay = now.getDay();
-      
-      // Find next scheduled day
-      const sortedDays = [...days].sort((a, b) => a - b);
-      let nextDay = sortedDays.find(day => day > currentDay);
-      
-      if (!nextDay) {
-        nextDay = sortedDays[0];
-      }
-      
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      return `${dayNames[nextDay]} at ${time} (${timezone})`;
-      
-    } catch (error) {
-      return 'Next scheduled time';
     }
   }
 
