@@ -2,6 +2,7 @@
 const StandupService = require('../../services/standupService');
 const Channel = require('../../models/Channel');
 const { MESSAGES, DAY_OPTIONS } = require('../../utils/constants');
+const { isDMChannel, getUserPendingStandups } = require('../../utils/channelHelpers');
 
 function register(app) {
   const standupService = new StandupService(app);
@@ -12,6 +13,69 @@ function register(app) {
 
     try {
       const { team_id, channel_id } = command;
+
+      if (isDMChannel(channel_id)) {
+        console.log(`👤 Personal status command received from user ${user_id}`);
+        
+        const pendingStandups = await getUserPendingStandups(team_id, user_id);
+        const recentResponses = await Response.findByUser(team_id, user_id, 5);
+        
+        let statusText = `👤 *Your Standup Status*\n\n`;
+        
+        // Pending responses section
+        if (pendingStandups.length > 0) {
+          statusText += `⏰ *Pending Responses (${pendingStandups.length}):*\n`;
+          
+          for (const standup of pendingStandups) {
+            try {
+              const channelInfo = await slackService.getChannelInfo(standup.channelId);
+              const timeLeft = standup.responseDeadline - new Date();
+              const hoursLeft = Math.max(0, Math.floor(timeLeft / (1000 * 60 * 60)));
+              const minutesLeft = Math.max(0, Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)));
+              
+              statusText += `🔄 *#${channelInfo?.name || standup.channelId}*\n`;
+              if (hoursLeft > 0) {
+                statusText += `   ⏱️ ${hoursLeft}h ${minutesLeft}m left\n`;
+              } else if (minutesLeft > 0) {
+                statusText += `   ⏱️ ${minutesLeft}m left\n`;
+              } else {
+                statusText += `   ⚠️ Overdue\n`;
+              }
+              statusText += `   📝 ${standup.questions.length} questions\n\n`;
+            } catch (error) {
+              console.warn(`Could not fetch channel info for ${standup.channelId}:`, error.message);
+              statusText += `🔄 *Unknown channel*\n`;
+              statusText += `   ⏱️ Please check the channel\n\n`;
+            }
+          }
+        } else {
+          statusText += `✅ *No pending responses!*\n\n`;
+        }
+
+        // Recent activity section
+        if (recentResponses.length > 0) {
+          statusText += `📋 *Recent Activity (Last 5):*\n`;
+          recentResponses.forEach(response => {
+            const date = response.submittedAt.toLocaleDateString();
+            const time = response.submittedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const status = response.isComplete ? '✅' : '⚠️';
+            const edited = response.isEdited ? ' ✏️' : '';
+            statusText += `• ${date} ${time} ${status}${edited}\n`;
+          });
+          statusText += `\n`;
+        }
+
+        // Helpful tips
+        statusText += `💡 *Tips:*\n`;
+        statusText += `• Use \`/standup-status\` in channels for team info\n`;
+        statusText += `• Reply to standup threads to submit responses\n`;
+        statusText += `• You can edit responses before the deadline`;
+
+        return respond({
+          text: statusText,
+          response_type: 'ephemeral'
+        });
+      }
 
       console.log(`📊 Status command received for channel ${channel_id}`);
 

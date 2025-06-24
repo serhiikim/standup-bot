@@ -3,6 +3,7 @@ const StandupService = require('../../services/standupService');
 const Channel = require('../../models/Channel');
 const Standup = require('../../models/Standup');
 const { MESSAGES } = require('../../utils/constants');
+const { isDMChannel } = require('../../utils/channelHelpers');
 
 function register(app) {
   const standupService = new StandupService(app);
@@ -13,6 +14,18 @@ function register(app) {
 
     try {
       const { team_id, channel_id, user_id } = command;
+
+      if (isDMChannel(channel_id)) {
+        return respond({
+          text: `🚀 *Start Standups in Channels Only*\n\n` +
+                `Standups are team activities that happen in channels, not direct messages.\n\n` +
+                `📋 *To start a standup:*\n` +
+                `1. Go to the channel with standup configured\n` +
+                `2. Type \`/standup-start\` in that channel\n\n` +
+                `💡 *Check your pending responses:* \`/standup-status\``,
+          response_type: 'ephemeral'
+        });
+      }
 
       console.log(`🚀 Start command received for channel ${channel_id} by user ${user_id}`);
 
@@ -88,6 +101,15 @@ function register(app) {
 
     try {
       const { team_id, channel_id } = command;
+
+      if (isDMChannel(channel_id)) {
+        return respond({
+          text: `✅ *Complete Standups in Channels Only*\n\n` +
+                `Go to the channel with an active standup and use \`/standup-complete\` there.\n\n` +
+                `💡 *Check pending responses:* \`/standup-status\``,
+          response_type: 'ephemeral'
+        });
+      }
 
       console.log(`✅ Complete command received for channel ${channel_id}`);
 

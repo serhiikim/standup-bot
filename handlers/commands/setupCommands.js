@@ -3,6 +3,7 @@ const Channel = require('../../models/Channel');
 const timezoneHelper = require('../../utils/timezoneHelper');
 const { createSetupModal } = require('./modalBuilder');
 const { MESSAGES } = require('../../utils/constants');
+const { isDMChannel } = require('../../utils/channelHelpers');
 
 function register(app) {
   const slackService = new SlackService(app);
@@ -13,6 +14,22 @@ function register(app) {
 
     try {
       const { team_id, channel_id, user_id, trigger_id } = command;
+
+      if (isDMChannel(channel_id)) {
+        return respond({
+          text: `🤖 *Standup Setup in Channels Only*\n\n` +
+                `Standups are team activities that work in channels, not direct messages.\n\n` +
+                `📋 *To set up a standup:*\n` +
+                `1. Go to the channel where you want standups\n` +
+                `2. Type \`/standup-setup\` in that channel\n` +
+                `3. Configure your team's standup questions and schedule\n\n` +
+                `💡 *Need help?* Try these commands here in DM:\n` +
+                `• \`/standup-status\` - Check your pending responses\n` +
+                `• Just mention me with "help" for more info\n\n` +
+                `🔗 Choose a channel and run \`/standup-setup\` there!`,
+          response_type: 'ephemeral'
+        });
+      }
 
       console.log(`📋 Setup command received for channel ${channel_id} by user ${user_id}`);
 

@@ -2,6 +2,7 @@
 const StandupService = require('../../services/standupService');
 const Channel = require('../../models/Channel');
 const Standup = require('../../models/Standup');
+const { isDMChannel } = require('../../utils/channelHelpers');
 
 function register(app) {  
   const standupService = new StandupService(app);
@@ -12,6 +13,15 @@ function register(app) {
 
     try {
       const { team_id, channel_id } = command;
+
+      if (isDMChannel(channel_id)) {
+        return respond({
+          text: `📢 *Send Reminders in Channels Only*\n\n` +
+                `Go to the channel with an active standup and use \`/standup-remind\` there.\n\n` +
+                `💡 *Check your status:* \`/standup-status\``,
+          response_type: 'ephemeral'
+        });
+      }
 
       console.log(`📢 Remind command received for channel ${channel_id}`);
 
@@ -58,6 +68,15 @@ function register(app) {
 
     try {
       const { team_id, channel_id } = command;
+
+      if (isDMChannel(channel_id)) {
+        return respond({
+          text: `🔍 *Debug Channels Only*\n\n` +
+                `Channel debugging works in channels, not DMs.\n\n` +
+                `💡 *Personal help:* \`/standup-status\``,
+          response_type: 'ephemeral'
+        });
+      }
 
       console.log(`🔍 Debug command received for channel ${channel_id}`);
 
