@@ -95,8 +95,8 @@ class StandupMessageBuilderService {
       {
         type: 'section',
         fields: [
-          { type: 'mrkdwn', text: `*Responses:*\n${stats.total}/${standup.stats.totalExpected} (${responseRate}%)` },
-          { type: 'mrkdwn', text: `*Duration:*\n${duration} minutes` }
+          { type: 'mrkdwn', text: `*Responses:*\n${stats.total}/${standup.stats.totalExpected} (${responseRate}%)` }
+        //   { type: 'mrkdwn', text: `*Duration:*\n${duration} minutes` }
         ]
       }
     ];
