@@ -4,10 +4,8 @@ const timezoneHelper = require('../../utils/timezoneHelper');
 const { createSetupModal } = require('./modalBuilder');
 const { MESSAGES } = require('../../utils/constants');
 
-let slackService;
-
 function register(app) {
-  slackService = new SlackService(app);
+  const slackService = new SlackService(app);
 
   // /standup-setup command
   app.command('/standup-setup', async ({ command, ack, respond, client }) => {

@@ -1,14 +1,10 @@
-const SlackService = require('../../services/slackService');
+
 const StandupService = require('../../services/standupService');
 const Channel = require('../../models/Channel');
 const { MESSAGES, DAY_OPTIONS } = require('../../utils/constants');
 
-let slackService;
-let standupService;
-
 function register(app) {
-  slackService = new SlackService(app);
-  standupService = new StandupService(app);
+  const standupService = new StandupService(app);
 
   // /standup-status command
   app.command('/standup-status', async ({ command, ack, respond }) => {
