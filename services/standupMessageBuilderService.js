@@ -313,26 +313,15 @@ class StandupMessageBuilderService {
   }
 
   getNextStandupTime(channel) {
-    try {
-      const { time, days, timezone } = channel.config;
-      const [hour, minute] = time.split(':').map(Number);
-      
-      const now = new Date();
-      const currentDay = now.getDay();
-      
-      const sortedDays = [...days].sort((a, b) => a - b);
-      let nextDay = sortedDays.find(day => day > currentDay);
-      
-      if (!nextDay) {
-        nextDay = sortedDays[0];
-      }
-      
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      return `${dayNames[nextDay]} at ${time} (${timezone})`;
-      
-    } catch (error) {
-      return 'Next scheduled time';
-    }
+    const { time, days, timezone } = channel.config;
+    const now = new Date();
+    const currentDay = now.getDay();
+    const sortedDays = [...days].sort((a, b) => a - b);
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    // Always next day - without "Today"
+    const nextDay = sortedDays.find(day => day > currentDay) || sortedDays[0];
+    return `${dayNames[nextDay]} at ${time} (${timezone})`;
   }
 }
 
