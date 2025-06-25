@@ -173,7 +173,7 @@ class Channel {
 
   // Helper method to parse config time
   parseConfigTime() {
-        const configTime = this.config.time.split(':');
+    const configTime = this.config.time.split(':');
     return {
       hour: parseInt(configTime[0]),
       minute: parseInt(configTime[1])
