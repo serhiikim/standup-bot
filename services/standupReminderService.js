@@ -46,7 +46,7 @@ class StandupReminderService {
         return false;
       }
 
-      await this.sendChannelReminders(standup, missingParticipants);
+    //  await this.sendChannelReminders(standup, missingParticipants);
       await this.sendDMReminders(standup, missingParticipants);
 
       const channel = await Channel.findByChannelId(standup.teamId, standup.channelId);
