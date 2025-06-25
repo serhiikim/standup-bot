@@ -82,7 +82,7 @@ class StandupReminderService {
     const hoursLeft = Math.max(0, Math.floor(timeLeft / (1000 * 60 * 60)));
     const minutesLeft = Math.max(0, Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)));
     const standupUrl = await this.slackService.getPermalink(standup.channelId, standup.threadTs);
-
+  
     let reminderText = `⏰ *Standup Reminder*\n\n`;
     if (hoursLeft > 0) {
       reminderText += `You have *${hoursLeft} hour(s) and ${minutesLeft} minute(s)* left to respond to today's standup.`;
@@ -91,21 +91,49 @@ class StandupReminderService {
     } else {
       reminderText += `⚠️ Standup deadline has passed, but you can still respond!`;
     }
-
+  
     if (standupUrl) {
       reminderText += `\n\nPlease post your update in the <${standupUrl}|standup thread>.`;
     }
-
-    for (const userId of missingParticipants) {
-      const channel = await this.slackService.openConversation(userId);
-      if (channel && channel.id) {
-        await this.slackService.postMessage(channel.id, reminderText);
+  
+    // Send DMs in parallel with error handling
+    const dmPromises = missingParticipants.map(async (userId) => {
+      try {
+        await this.slackService.sendDM(userId, reminderText);
+        standup.addReminder(userId);
+        return { userId, success: true };
+      } catch (error) {
+        console.error(`Failed to send DM reminder to user ${userId}:`, error);
+        return { userId, success: false, error: error.message };
       }
-      standup.addReminder(userId);
+    });
+  
+    const results = await Promise.allSettled(dmPromises);
+    
+    // Count successful sends
+    const successfulSends = results.filter(result => 
+      result.status === 'fulfilled' && result.value.success
+    ).length;
+  
+    // Log any failures
+    const failures = results.filter(result => 
+      result.status === 'rejected' || 
+      (result.status === 'fulfilled' && !result.value.success)
+    );
+  
+    if (failures.length > 0) {
+      console.warn(`Failed to send ${failures.length}/${missingParticipants.length} DM reminders for standup ${standupId}`);
+      failures.forEach(failure => {
+        if (failure.status === 'fulfilled') {
+          console.warn(`- User ${failure.value.userId}: ${failure.value.error}`);
+        } else {
+          console.warn(`- Promise rejected: ${failure.reason}`);
+        }
+      });
     }
-
-    console.log(`📢 Sent DM reminders for standup ${standupId} to ${missingParticipants.length} users`);
-    return true;
+  
+    console.log(`📢 Sent DM reminders for standup ${standupId} to ${successfulSends}/${missingParticipants.length} users`);
+    return successfulSends > 0;
   }
 
   async processPendingReminders() {
