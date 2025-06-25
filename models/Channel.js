@@ -24,8 +24,8 @@ class Channel {
       timezone: DEFAULT_TIMEZONE,
       participants: [], // Array of user IDs, empty = all channel members
       responseTimeout: 3 * 60 * 60 * 1000, // 3 hours in milliseconds
-      enableReminders: true,
-      reminderInterval: 60 * 60 * 1000, // 1 hour
+      reminderInterval: { type: Number, default: 60 }, // in minutes
+        enableReminders: { type: Boolean, default: true },
       requireAllResponses: false,
       autoSummary: true
     };

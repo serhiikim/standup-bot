@@ -27,27 +27,12 @@ class StandupReminderService {
         await standup.save();
         return false;
       }
-      const missingUsers = await this.slackService.getUsersInfo(missingParticipants);
-      const mentions = missingUsers.map(user => this.slackService.formatUserMention(user.id)).join(' ');
-      const timeLeft = standup.responseDeadline - new Date();
-      const hoursLeft = Math.max(0, Math.floor(timeLeft / (1000 * 60 * 60)));
-      const minutesLeft = Math.max(0, Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)));
-      let reminderText = `⏰ *Standup Reminder*\n\n${mentions}\n\n`;
-      if (hoursLeft > 0) {
-        reminderText += `You have *${hoursLeft} hour(s) and ${minutesLeft} minute(s)* left to respond to today's standup.`;
-      } else if (minutesLeft > 0) {
-        reminderText += `You have *${minutesLeft} minute(s)* left to respond to today's standup.`;
-      } else {
-        reminderText += `⚠️ Standup deadline has passed, but you can still respond!`;
-      }
-      await this.slackService.postMessage(
-        standup.channelId,
-        reminderText,
-        null,
-        standup.threadTs
-      );
-      standup.addReminder('general');
+
+      await this.sendChannelReminders(standup, missingParticipants);
+      await this.sendDMReminders(standup, missingParticipants);
+
       const channel = await Channel.findByChannelId(standup.teamId, standup.channelId);
+      const timeLeft = standup.responseDeadline - new Date();
       if (channel.config.enableReminders && timeLeft > 0) {
         const nextReminderTime = new Date(Date.now() + channel.config.reminderInterval);
         if (nextReminderTime < standup.responseDeadline) {
@@ -57,12 +42,70 @@ class StandupReminderService {
         }
       }
       await standup.save();
-      console.log(`📢 Sent reminder for standup ${standupId} to ${missingParticipants.length} users`);
+
       return true;
     } catch (error) {
       console.error('Error sending reminders:', error);
       return false;
     }
+  }
+
+  async sendChannelReminders(standup, missingParticipants) {
+    const standupId = standup._id;
+    const missingUsers = await this.slackService.getUsersInfo(missingParticipants);
+    const mentions = missingUsers.map(user => this.slackService.formatUserMention(user.id)).join(' ');
+    const timeLeft = standup.responseDeadline - new Date();
+    const hoursLeft = Math.max(0, Math.floor(timeLeft / (1000 * 60 * 60)));
+    const minutesLeft = Math.max(0, Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)));
+    let reminderText = `⏰ *Standup Reminder*\n\n${mentions}\n\n`;
+    if (hoursLeft > 0) {
+      reminderText += `You have *${hoursLeft} hour(s) and ${minutesLeft} minute(s)* left to respond to today's standup.`;
+    } else if (minutesLeft > 0) {
+      reminderText += `You have *${minutesLeft} minute(s)* left to respond to today's standup.`;
+    } else {
+      reminderText += `⚠️ Standup deadline has passed, but you can still respond!`;
+    }
+    await this.slackService.postMessage(
+      standup.channelId,
+      reminderText,
+      null,
+      standup.threadTs
+    );
+    standup.addReminder('general');
+    console.log(`📢 Sent reminder for standup ${standupId} to ${missingParticipants.length} users`);
+    return true;
+  }
+
+  async sendDMReminders(standup, missingParticipants) {
+    const standupId = standup._id;
+    const timeLeft = standup.responseDeadline - new Date();
+    const hoursLeft = Math.max(0, Math.floor(timeLeft / (1000 * 60 * 60)));
+    const minutesLeft = Math.max(0, Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)));
+    const standupUrl = await this.slackService.getPermalink(standup.channelId, standup.threadTs);
+
+    let reminderText = `⏰ *Standup Reminder*\n\n`;
+    if (hoursLeft > 0) {
+      reminderText += `You have *${hoursLeft} hour(s) and ${minutesLeft} minute(s)* left to respond to today's standup.`;
+    } else if (minutesLeft > 0) {
+      reminderText += `You have *${minutesLeft} minute(s)* left to respond to today's standup.`;
+    } else {
+      reminderText += `⚠️ Standup deadline has passed, but you can still respond!`;
+    }
+
+    if (standupUrl) {
+      reminderText += `\n\nPlease post your update in the <${standupUrl}|standup thread>.`;
+    }
+
+    for (const userId of missingParticipants) {
+      const channel = await this.slackService.openConversation(userId);
+      if (channel && channel.id) {
+        await this.slackService.postMessage(channel.id, reminderText);
+      }
+      standup.addReminder(userId);
+    }
+
+    console.log(`📢 Sent DM reminders for standup ${standupId} to ${missingParticipants.length} users`);
+    return true;
   }
 
   async processPendingReminders() {
@@ -80,4 +123,4 @@ class StandupReminderService {
   }
 }
 
-module.exports = StandupReminderService; 
+module.exports = StandupReminderService;

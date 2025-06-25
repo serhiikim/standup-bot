@@ -22,7 +22,7 @@ function register(app) {
                 `📋 *To set up a standup:*\n` +
                 `1. Go to the channel where you want standups\n` +
                 `2. Type \`/standup-setup\` in that channel\n` +
-                `3. Configure your team's standup questions and schedule\n\n` +
+                `3. Configure your team\'s standup questions and schedule\n\n` +
                 `💡 *Need help?* Try these commands here in DM:\n` +
                 `• \`/standup-status\` - Check your pending responses\n` +
                 `• Just mention me with "help" for more info\n\n` +
@@ -89,4 +89,4 @@ function register(app) {
   });
 }
 
-module.exports = { register }; 
+module.exports = { register };
