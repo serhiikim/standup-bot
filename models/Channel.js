@@ -24,8 +24,8 @@ class Channel {
       timezone: DEFAULT_TIMEZONE,
       participants: [], // Array of user IDs, empty = all channel members
       responseTimeout: 3 * 60 * 60 * 1000, // 3 hours in milliseconds
-      reminderInterval: { type: Number, default: 60 }, // in minutes
-        enableReminders: { type: Boolean, default: true },
+      enableReminders: true,
+      reminderInterval: 60 * 60 * 1000, // 1 hour in milliseconds
       requireAllResponses: false,
       autoSummary: true
     };
@@ -173,7 +173,7 @@ class Channel {
 
   // Helper method to parse config time
   parseConfigTime() {
-    const configTime = this.config.time.split(':');
+        const configTime = this.config.time.split(':');
     return {
       hour: parseInt(configTime[0]),
       minute: parseInt(configTime[1])
