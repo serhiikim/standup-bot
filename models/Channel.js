@@ -25,7 +25,7 @@ class Channel {
       participants: [], // Array of user IDs, empty = all channel members
       responseTimeout: 3 * 60 * 60 * 1000, // 3 hours in milliseconds
       enableReminders: true,
-      reminderInterval: 60 * 60 * 1000, // 1 hour
+      reminderInterval: 60 * 60 * 1000, // 1 hour in milliseconds
       requireAllResponses: false,
       autoSummary: true
     };
