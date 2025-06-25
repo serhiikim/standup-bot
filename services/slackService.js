@@ -108,6 +108,19 @@ class SlackService {
     }
   }
 
+  async getPermalink(channelId, messageTs) {
+    try {
+      const result = await this.app.client.chat.getPermalink({
+        channel: channelId,
+        message_ts: messageTs
+      });
+      return result.permalink;
+    } catch (error) {
+      console.error('Error getting permalink:', error);
+      return null;
+    }
+  }
+
   async sendDM(userId, text, blocks = null) {
     try {
       // Open DM conversation
