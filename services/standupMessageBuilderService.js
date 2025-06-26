@@ -123,11 +123,9 @@ class StandupMessageBuilderService {
 
   createCompletionMessage(standup, responses, stats, aiAnalysis = null) {
     const responseRate = standup.getResponseRate();
-    const duration = Math.floor(standup.getDuration() / (1000 * 60));
     
     let text = `✅ *Standup Completed!*\n\n`;
     text += `📊 *Results:* ${stats.total}/${standup.stats.totalExpected} responses (${responseRate}%)\n`;
-    text += `⏱️ *Duration:* ${duration} minutes\n`;
 
     if (standup.oooInfo && standup.oooInfo.oooCount > 0) {
       text += `📴 *Out of office:* ${standup.oooInfo.oooCount} team member(s)\n`;
