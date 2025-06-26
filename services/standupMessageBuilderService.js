@@ -127,7 +127,7 @@ class StandupMessageBuilderService {
     
     let text = `✅ *Standup Completed!*\n\n`;
     text += `📊 *Results:* ${stats.total}/${standup.stats.totalExpected} responses (${responseRate}%)\n`;
-    text += `⏱️ *Duration:* ${duration} minutes\n`;
+    //text += `⏱️ *Duration:* ${duration} minutes\n`;
 
     if (standup.oooInfo && standup.oooInfo.oooCount > 0) {
       text += `📴 *Out of office:* ${standup.oooInfo.oooCount} team member(s)\n`;
