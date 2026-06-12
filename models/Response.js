@@ -1,5 +1,5 @@
-const { ObjectId } = require('mongodb');
 const database = require('../config/database');
+const { ObjectId } = database;
 
 class Response {
   constructor(data) {

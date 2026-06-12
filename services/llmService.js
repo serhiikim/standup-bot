@@ -13,22 +13,49 @@ class LLMService {
       throw new Error('LLMService is a singleton. Use LLMService.getInstance() instead.');
     }
 
-    this.openai = process.env.OPENAI_API_KEY ? new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+    const apiKey = process.env.AI_API_KEY || process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+    const baseURL = process.env.AI_BASE_URL || process.env.OPENAI_BASE_URL;
+    
+    let defaultModel = 'gpt-4o-mini';
+    if (baseURL && baseURL.includes('googleapis.com')) {
+      defaultModel = 'gemini-2.5-flash';
+    } else if (process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
+      defaultModel = 'gemini-2.5-flash';
+    }
+    
+    this.model = process.env.AI_MODEL || process.env.OPENAI_MODEL || process.env.GEMINI_MODEL || defaultModel;
+
+    let finalBaseURL = baseURL;
+    if (!finalBaseURL && process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
+      finalBaseURL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+    }
+
+    this.openai = apiKey ? new OpenAI({
+      apiKey: apiKey,
+      baseURL: finalBaseURL || undefined,
       timeout: 30000,
       maxRetries: 2
     }) : null;
     
     this.isEnabled = !!this.openai;
-    this.model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
     
     if (!this.isEnabled) {
       console.warn('⚠️ LLM features disabled (no API key configured)');
     } else {
-      console.log(`🤖 LLM Service enabled (model: ${this.model})`);
+      console.log(`🤖 LLM Service enabled (model: ${this.model}, endpoint: ${finalBaseURL || 'default-openai'})`);
     }
 
     LLMService.instance = this;
+  }
+
+  /**
+   * Get the name of the LLM provider
+   */
+  getProviderName() {
+    if (!this.isEnabled) return 'none';
+    const baseURL = this.openai.baseURL || '';
+    if (baseURL.includes('googleapis.com')) return 'gemini';
+    return 'openai';
   }
 
   /**
@@ -79,7 +106,7 @@ class LLMService {
         nextSteps: parsedAnalysis.nextSteps,
         teamMood: parsedAnalysis.teamMood,
         rawAnalysis: analysis,
-        generatedBy: 'openai',
+        generatedBy: this.getProviderName(),
         generatedAt: new Date()
       };
 

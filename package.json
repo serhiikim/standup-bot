@@ -6,7 +6,7 @@
     "scripts": {
         "start": "node app.js",
         "dev": "nodemon app.js",
-        "test": "echo \"Error: no test specified\" && exit 1",
+        "test": "node --test tests/database.test.js && node --test tests/llmService.test.js && node --test tests/models.test.js",
         "docker:setup": "./scripts/setup.sh",
         "docker:start": "./scripts/start.sh",
         "docker:stop": "./scripts/stop.sh",
@@ -31,7 +31,9 @@
         "dotenv": "^16.3.1",
         "mongodb": "^6.3.0",
         "node-cron": "^4.2.1",
-        "openai": "^4.24.7"
+        "openai": "^4.24.7",
+        "sqlite": "^5.1.1",
+        "sqlite3": "^6.0.1"
     },
     "devDependencies": {
         "nodemon": "^3.0.2"

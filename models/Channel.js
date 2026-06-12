@@ -1,5 +1,5 @@
-const { ObjectId } = require('mongodb');
 const database = require('../config/database');
+const { ObjectId } = database;
 const { 
   DEFAULT_STANDUP_QUESTIONS, 
   DEFAULT_STANDUP_TIME, 
