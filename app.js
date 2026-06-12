@@ -34,15 +34,15 @@ app.error(async (error) => {
   console.error('Full error:', error);
 });
 
-// Process-level error handling
+// Process-level error handling — exit and let Docker restart cleanly
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
-  // Don't exit, just log
+  process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  // Don't exit, just log
+  process.exit(1);
 });
 
 // Initialize handlers
@@ -82,29 +82,17 @@ async function startApp() {
     console.log(`📱 Mode: ${process.env.SLACK_APP_TOKEN ? 'Socket Mode' : 'HTTP Mode'}`);
     console.log(`🌐 Port: ${process.env.PORT || 3000} (internal only)`);
     
-    // Log successful Socket Mode connection
-    console.log('✅ Slack Socket Mode connection established');
-    
   } catch (error) {
     console.error('❌ Failed to start application:', error);
-    // In production, don't exit - try to recover
-    if (process.env.NODE_ENV === 'production') {
-      console.log('🔄 Attempting to restart in 10 seconds...');
-      setTimeout(() => {
-        startApp();
-      }, 10000);
-    } else {
-      process.exit(1);
-    }
+    process.exit(1);
   }
 }
 
 // Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('\n🛑 Shutting down gracefully...');
+async function shutdown(signal) {
+  console.log(`\n🛑 ${signal} received, shutting down gracefully...`);
   
   try {
-    console.log('🛑 Shutting down gracefully...');
     scheduler.stop();
     await app.stop();
     await database.close();
@@ -114,21 +102,10 @@ process.on('SIGINT', async () => {
     console.error('❌ Error during shutdown:', error);
     process.exit(1);
   }
-});
+}
 
-process.on('SIGTERM', async () => {
-  console.log('\n🛑 SIGTERM received, shutting down...');
-  
-  try {
-    scheduler.stop();
-    await app.stop();
-    await database.close();
-    process.exit(0);
-  } catch (error) {
-    console.error('❌ Error during shutdown:', error);
-    process.exit(1);
-  }
-});
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 // Start the application
 startApp();

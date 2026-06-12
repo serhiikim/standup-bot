@@ -277,7 +277,7 @@ class SlackService {
         text: label
       },
       element: {
-        type: multiline ? 'plain_text_input' : 'plain_text_input',
+        type: 'plain_text_input',
         action_id: actionId,
         placeholder: {
           type: 'plain_text',

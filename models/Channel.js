@@ -123,18 +123,12 @@ class Channel {
   async save() {
     this.updatedAt = new Date();
     
-    if (this._id && await Channel.getCollection().findOne({ _id: this._id })) {
-      // Update existing
-      const { _id, ...updateData } = this;
-      await Channel.getCollection().updateOne(
-        { _id: this._id },
-        { $set: updateData }
-      );
-    } else {
-      // Create new
-      const result = await Channel.getCollection().insertOne(this);
-      this._id = result.insertedId;
-    }
+    const { _id, ...updateData } = this;
+    await Channel.getCollection().updateOne(
+      { _id: this._id },
+      { $set: updateData },
+      { upsert: true }
+    );
     
     return this;
   }
@@ -199,16 +193,6 @@ class Channel {
       const currentHour = parseInt(parts.find(p => p.type === 'hour').value);
       const currentMinute = parseInt(parts.find(p => p.type === 'minute').value);
       
-      // console.log(`🕐 Channel ${this.channelId} time check:`, {
-      //   configTime: `${configHour}:${String(configMinute).padStart(2, '0')}`,
-      //   timezone: channelTimezone,
-      //   currentTimeUTC: now.toISOString(),
-      //   currentTimeInTZ: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
-      //   currentHour,
-      //   currentMinute,
-      //   matches: currentHour === configHour && currentMinute === configMinute
-      // });
-      
       return currentHour === configHour && currentMinute === configMinute;
       
     } catch (error) {
@@ -219,12 +203,6 @@ class Channel {
       const now = new Date(currentTime);
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
-      
-      // console.log(`🕐 Channel ${this.channelId} fallback UTC check:`, {
-      //   configTime: `${configHour}:${String(configMinute).padStart(2, '0')}`,
-      //   currentTime: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
-      //   matches: currentHour === configHour && currentMinute === configMinute
-      // });
       
       return currentHour === configHour && currentMinute === configMinute;
     }

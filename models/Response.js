@@ -120,18 +120,12 @@ class Response {
   async save() {
     this.updatedAt = new Date();
     
-    if (this._id && await Response.getCollection().findOne({ _id: this._id })) {
-      // Update existing
-      const { _id, ...updateData } = this;
-      await Response.getCollection().updateOne(
-        { _id: this._id },
-        { $set: updateData }
-      );
-    } else {
-      // Create new
-      const result = await Response.getCollection().insertOne(this);
-      this._id = result.insertedId;
-    }
+    const { _id, ...updateData } = this;
+    await Response.getCollection().updateOne(
+      { _id: this._id },
+      { $set: updateData },
+      { upsert: true }
+    );
     
     return this;
   }

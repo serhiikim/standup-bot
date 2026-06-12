@@ -82,18 +82,12 @@ class Team {
   async save() {
     this.updatedAt = new Date();
     
-    if (this._id && await Team.getCollection().findOne({ _id: this._id })) {
-      // Update existing
-      const { _id, ...updateData } = this;
-      await Team.getCollection().updateOne(
-        { _id: this._id },
-        { $set: updateData }
-      );
-    } else {
-      // Create new
-      const result = await Team.getCollection().insertOne(this);
-      this._id = result.insertedId;
-    }
+    const { _id, ...updateData } = this;
+    await Team.getCollection().updateOne(
+      { _id: this._id },
+      { $set: updateData },
+      { upsert: true }
+    );
     
     return this;
   }

@@ -13,23 +13,19 @@ class LLMService {
       throw new Error('LLMService is a singleton. Use LLMService.getInstance() instead.');
     }
 
-    console.log('🔍 Checking OpenAI API key...');
-    console.log('API Key exists:', !!process.env.OPENAI_API_KEY);
-    console.log('API Key length:', process.env.OPENAI_API_KEY?.length || 0);
-    console.log('API Key starts with sk-:', process.env.OPENAI_API_KEY?.startsWith('sk-') || false);
-    
     this.openai = process.env.OPENAI_API_KEY ? new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
+      apiKey: process.env.OPENAI_API_KEY,
+      timeout: 30000,
+      maxRetries: 2
     }) : null;
     
     this.isEnabled = !!this.openai;
     this.model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
     
     if (!this.isEnabled) {
-      console.warn('⚠️ OpenAI API key not configured - LLM features disabled');
+      console.warn('⚠️ LLM features disabled (no API key configured)');
     } else {
-      console.log('✅ OpenAI API key configured successfully');
-      console.log('🤖 Using model:', this.model);
+      console.log(`🤖 LLM Service enabled (model: ${this.model})`);
     }
 
     LLMService.instance = this;

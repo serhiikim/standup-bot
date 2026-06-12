@@ -22,6 +22,17 @@ class Database {
       const dbName = uri.split('/').pop().split('?')[0] || 'slack-standup-bot';
       this.db = this.client.db(dbName);
 
+      // Monitor connection events
+      this.client.on('close', () => {
+        console.error('⚠️ MongoDB connection closed unexpectedly');
+      });
+      this.client.on('error', (err) => {
+        console.error('⚠️ MongoDB connection error:', err.message);
+      });
+      this.client.on('serverHeartbeatFailed', (event) => {
+        console.error('⚠️ MongoDB heartbeat failed:', event.failure?.message);
+      });
+
       console.log('✅ Connected to MongoDB successfully');
       
       // Create indexes for better performance
@@ -42,11 +53,27 @@ class Database {
       // Channels collection indexes
       await this.db.collection('channels').createIndex({ teamId: 1, channelId: 1 }, { unique: true });
       await this.db.collection('channels').createIndex({ teamId: 1 });
+      await this.db.collection('channels').createIndex(
+        { isActive: 1, status: 1, 'config.days': 1 },
+        { name: 'scheduler_lookup' }
+      );
       
       // Standups collection indexes
       await this.db.collection('standups').createIndex({ teamId: 1, channelId: 1 });
       await this.db.collection('standups').createIndex({ status: 1 });
       await this.db.collection('standups').createIndex({ scheduledDate: 1 });
+      await this.db.collection('standups').createIndex(
+        { status: 1, responseDeadline: 1 },
+        { name: 'expired_standups_lookup' }
+      );
+      await this.db.collection('standups').createIndex(
+        { status: 1, 'reminders.nextReminderAt': 1 },
+        { name: 'pending_reminders_lookup' }
+      );
+      await this.db.collection('standups').createIndex(
+        { teamId: 1, channelId: 1, startedAt: -1 },
+        { name: 'has_standup_today_lookup' }
+      );
       
       // Responses collection indexes
       await this.db.collection('responses').createIndex({ standupId: 1 });

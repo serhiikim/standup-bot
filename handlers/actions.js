@@ -46,22 +46,32 @@ function register(app) {
     // Could implement real-time validation here if needed
   });
 
-  // Generic button handlers for future use
+  // Start button handler
   app.action(BLOCK_IDS.START_BUTTON, async ({ ack, body, action, respond }) => {
     await ack();
     
     try {
-      // Handle manual standup start button
-      // This will be implemented when we add the standup service
+      const channelId = body.channel?.id;
+      const teamId = body.team?.id;
+      const userId = body.user.id;
+
+      if (!channelId || !teamId) {
+        return await respond({
+          text: '❌ Could not determine channel context.',
+          response_type: 'ephemeral'
+        });
+      }
+
+      const standup = await standupService.startStandup(teamId, channelId, userId, true);
       await respond({
-        text: '🚀 Starting standup... (Feature coming soon!)',
+        text: `🚀 Standup started! Check the channel for the standup thread.`,
         response_type: 'ephemeral',
         replace_original: false
       });
     } catch (error) {
       console.error('Error handling start button:', error);
       await respond({
-        text: '❌ Failed to start standup.',
+        text: `❌ Failed to start standup: ${error.message}`,
         response_type: 'ephemeral'
       });
     }

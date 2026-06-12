@@ -149,23 +149,53 @@ class Scheduler {
    */
   async hasStandupToday(channel) {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const channelTimezone = channel.config?.timezone || 'UTC';
       
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      // Get today's date in the channel's timezone
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: channelTimezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const todayStr = formatter.format(now); // YYYY-MM-DD in channel TZ
+      
+      // Build start/end of day in channel timezone
+      const startOfDay = new Date(`${todayStr}T00:00:00`);
+      const endOfDay = new Date(`${todayStr}T23:59:59.999`);
+      
+      // Convert to UTC for DB query by creating dates in the channel TZ
+      const startFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: channelTimezone,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+      });
+      
+      // Use a simpler approach: query a generous window (last 24h) and check
+      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
       const Standup = require('../models/Standup');
       const standups = await Standup.getCollection().find({
         teamId: channel.teamId,
         channelId: channel.channelId,
-        startedAt: {
-          $gte: today,
-          $lt: tomorrow
-        }
+        startedAt: { $gte: twentyFourHoursAgo }
       }).toArray();
 
-      return standups.length > 0;
+      // Check if any standup was started on the same calendar day in the channel's timezone
+      for (const standup of standups) {
+        const standupDateStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: channelTimezone,
+          year: 'numeric', month: '2-digit', day: '2-digit'
+        }).format(standup.startedAt);
+        
+        if (standupDateStr === todayStr) {
+          return true;
+        }
+      }
+
+      return false;
 
     } catch (error) {
       console.error('Error checking today standups:', error);

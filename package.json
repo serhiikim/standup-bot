@@ -4,39 +4,39 @@
     "description": "AI-powered Slack standup bot with intelligent response analysis",
     "main": "app.js",
     "scripts": {
-      "start": "node app.js",
-      "dev": "nodemon app.js",
-      "test": "echo \"Error: no test specified\" && exit 1",
-      "docker:setup": "./scripts/setup.sh",
-      "docker:start": "./scripts/start.sh",
-      "docker:stop": "./scripts/stop.sh",
-      "docker:restart": "./scripts/restart.sh",
-      "docker:logs": "./scripts/logs.sh",
-      "docker:dev": "./scripts/dev.sh",
-      "docker:health": "./scripts/health.sh",
-      "docker:clean": "./scripts/clean.sh",
-      "docker:update": "./scripts/update.sh"
+        "start": "node app.js",
+        "dev": "nodemon app.js",
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "docker:setup": "./scripts/setup.sh",
+        "docker:start": "./scripts/start.sh",
+        "docker:stop": "./scripts/stop.sh",
+        "docker:restart": "./scripts/restart.sh",
+        "docker:logs": "./scripts/logs.sh",
+        "docker:dev": "./scripts/dev.sh",
+        "docker:health": "./scripts/health.sh",
+        "docker:clean": "./scripts/clean.sh",
+        "docker:update": "./scripts/update.sh"
     },
     "keywords": [
-      "slack",
-      "bot",
-      "standup",
-      "ai",
-      "productivity"
+        "slack",
+        "bot",
+        "standup",
+        "ai",
+        "productivity"
     ],
     "author": "Your Name",
     "license": "MIT",
     "dependencies": {
-      "@slack/bolt": "^3.17.1",
-      "mongodb": "^6.3.0",
-      "node-cron": "^3.0.3",
-      "openai": "^4.24.7",
-      "dotenv": "^16.3.1"
+        "@slack/bolt": "^3.17.1",
+        "dotenv": "^16.3.1",
+        "mongodb": "^6.3.0",
+        "node-cron": "^4.2.1",
+        "openai": "^4.24.7"
     },
     "devDependencies": {
-      "nodemon": "^3.0.2"
+        "nodemon": "^3.0.2"
     },
     "engines": {
-      "node": ">=18.0.0"
+        "node": ">=18.0.0"
     }
-  }
+}

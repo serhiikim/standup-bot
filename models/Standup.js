@@ -44,6 +44,9 @@ class Standup {
       sent: [],
       nextReminderAt: null
     };
+
+    // OOO information
+    this.oooInfo = data.oooInfo || null;
     
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || new Date();
@@ -130,18 +133,12 @@ class Standup {
   async save() {
     this.updatedAt = new Date();
     
-    if (this._id && await Standup.getCollection().findOne({ _id: this._id })) {
-      // Update existing
-      const { _id, ...updateData } = this;
-      await Standup.getCollection().updateOne(
-        { _id: this._id },
-        { $set: updateData }
-      );
-    } else {
-      // Create new
-      const result = await Standup.getCollection().insertOne(this);
-      this._id = result.insertedId;
-    }
+    const { _id, ...updateData } = this;
+    await Standup.getCollection().updateOne(
+      { _id: this._id },
+      { $set: updateData },
+      { upsert: true }
+    );
     
     return this;
   }
