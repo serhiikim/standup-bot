@@ -6,7 +6,7 @@
     "scripts": {
         "start": "node app.js",
         "dev": "nodemon app.js",
-        "test": "node --test tests/database.test.js && node --test tests/llmService.test.js && node --test tests/models.test.js",
+        "test": "node tests/database.test.js && node tests/llmService.test.js && node tests/models.test.js",
         "docker:setup": "./scripts/setup.sh",
         "docker:start": "./scripts/start.sh",
         "docker:stop": "./scripts/stop.sh",

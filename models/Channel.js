@@ -5,6 +5,7 @@ const {
   DEFAULT_STANDUP_TIME, 
   DEFAULT_STANDUP_DAYS,
   DEFAULT_TIMEZONE,
+  DEFAULT_RESPONSE_TIMEOUT,
   CHANNEL_STATUS 
 } = require('../utils/constants');
 
@@ -23,7 +24,7 @@ class Channel {
       days: [...DEFAULT_STANDUP_DAYS],
       timezone: DEFAULT_TIMEZONE,
       participants: [], // Array of user IDs, empty = all channel members
-      responseTimeout: 3 * 60 * 60 * 1000, // 3 hours in milliseconds
+      responseTimeout: DEFAULT_RESPONSE_TIMEOUT,
       enableReminders: true,
       reminderInterval: 60 * 60 * 1000, // 1 hour in milliseconds
       requireAllResponses: false,

@@ -8,7 +8,8 @@ const {
   DEFAULT_STANDUP_QUESTIONS,
   DEFAULT_STANDUP_TIME,
   DEFAULT_STANDUP_DAYS,
-  DEFAULT_TIMEZONE
+  DEFAULT_TIMEZONE,
+  DEFAULT_RESPONSE_TIMEOUT
 } = require('../utils/constants');
 
 let slackService;
@@ -210,6 +211,20 @@ function validateSetupForm(values) {
       });
     }
   
+    // Calculate timeout as duration from configured start time (formData.time) until 18:00 (6 PM)
+    let responseTimeout = DEFAULT_RESPONSE_TIMEOUT;
+    try {
+      const [startHour, startMinute] = formData.time.split(':').map(Number);
+      const startMins = startHour * 60 + startMinute;
+      const endMins = 18 * 60; // 6 PM
+      const diffMins = endMins - startMins;
+      if (diffMins > 0) {
+        responseTimeout = diffMins * 60 * 1000;
+      }
+    } catch (e) {
+      console.error('Error calculating response timeout:', e);
+    }
+
     const channelData = {
       teamId: teamId,
       channelId: channelId,
@@ -221,7 +236,7 @@ function validateSetupForm(values) {
         days: formData.days,
         timezone: formData.timezone, // Taken from the auto-detected value
         participants: formData.participants,
-        responseTimeout: 3 * 60 * 60 * 1000, // 3 hours
+        responseTimeout: responseTimeout,
         enableReminders: true,
         reminderInterval: 60 * 60 * 1000, // 1 hour
         requireAllResponses: false,

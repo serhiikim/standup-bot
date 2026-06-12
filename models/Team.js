@@ -1,5 +1,6 @@
 const database = require('../config/database');
 const { ObjectId } = database;
+const { DEFAULT_RESPONSE_TIMEOUT } = require('../utils/constants');
 
 class Team {
   constructor(data) {
@@ -14,7 +15,7 @@ class Team {
     this.settings = data.settings || {
       defaultTimezone: 'UTC',
       allowUserTimezones: true,
-      maxResponseTime: 3 * 60 * 60 * 1000, // 3 hours
+      maxResponseTime: DEFAULT_RESPONSE_TIMEOUT,
       enableReminders: true,
       reminderInterval: 60 * 60 * 1000 // 1 hour
     };

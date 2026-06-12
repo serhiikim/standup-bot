@@ -67,6 +67,16 @@ describe('Models Database CRUD Verification', () => {
     assert.strictEqual(checkDeleted, null);
   });
 
+  test('Model default response timeout constants verification', () => {
+    const { DEFAULT_RESPONSE_TIMEOUT } = require('../utils/constants');
+    
+    const defaultTeam = new Team({ teamId: 'T_DEFAULT', teamName: 'Default Team' });
+    assert.strictEqual(defaultTeam.settings.maxResponseTime, DEFAULT_RESPONSE_TIMEOUT, 'Team maxResponseTime should default to DEFAULT_RESPONSE_TIMEOUT');
+
+    const defaultChannel = new Channel({ teamId: 'T_DEFAULT', channelId: 'C_DEFAULT', channelName: 'Default Channel' });
+    assert.strictEqual(defaultChannel.config.responseTimeout, DEFAULT_RESPONSE_TIMEOUT, 'Channel responseTimeout should default to DEFAULT_RESPONSE_TIMEOUT');
+  });
+
   test('Channel CRUD operations', async () => {
     // 1. Create
     const channel = await Channel.create({
