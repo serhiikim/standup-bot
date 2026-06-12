@@ -21,8 +21,8 @@ if [ ! -f .env ]; then
     echo "✅ Created .env file"
     echo "📋 Please edit .env file with your configuration:"
     echo "   1. Add your Slack app credentials"
-    echo "   2. Add your MongoDB Atlas connection string"
-    echo "   3. Optionally add OpenAI API key for AI features"
+    echo "   2. Optional: Add MongoDB Atlas connection string (SQLite is used by default)"
+    echo "   3. Optional: Add OpenAI API key or Gemini API key for AI features"
 else
     echo "✅ .env file already exists"
 fi

@@ -19,8 +19,8 @@ AI-powered Slack standup bot with intelligent response analysis, automated sched
 
 - Docker and Docker Compose
 - Slack workspace with bot permissions
-- MongoDB Atlas account (free tier available)
-- OpenAI API key (optional, for AI features)
+- SQLite (used by default, zero-configuration) or MongoDB Atlas (optional)
+- OpenAI API key or Gemini API key (optional, for AI features)
 
 ### Installation
 
@@ -44,12 +44,23 @@ AI-powered Slack standup bot with intelligent response analysis, automated sched
    SLACK_SIGNING_SECRET=your-signing-secret
    SLACK_APP_TOKEN=xapp-your-app-token
 
-   # MongoDB Atlas (Required)
-   MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/slack-standup-bot
+   # Database Configuration (Optional)
+   # By default, the app uses SQLite (zero-config). To use MongoDB instead:
+   # MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/slack-standup-bot
 
-   # OpenAI (Optional - for AI features)
+   # AI Configuration (Optional - for AI features)
+   # 1. Standard OpenAI config:
    OPENAI_API_KEY=sk-your-openai-api-key
    OPENAI_MODEL=gpt-4o-mini
+
+   # 2. Or Google Gemini (via OpenAI-compatible endpoint):
+   # GEMINI_API_KEY=your-gemini-key
+   # GEMINI_MODEL=gemini-2.5-flash
+
+   # 3. Or generic compatible provider (DeepSeek, OpenRouter, local, etc):
+   # AI_API_KEY=your-key
+   # AI_BASE_URL=https://api.example.com/v1/
+   # AI_MODEL=your-model
    ```
 
 4. **Start the bot**
@@ -229,7 +240,16 @@ git pull && docker-compose up --build -d
 
 ## Development
 
-For local development with a local MongoDB:
+For local development, the bot automatically uses SQLite, saving a local `standup-bot.db` file in the root. 
+
+### Running Tests
+We use Node's native test runner (`node:test` and `node:assert`). Run the test suite:
+```bash
+npm test
+```
+
+### Local Development (with MongoDB Profile)
+If you want to develop with MongoDB locally:
 
 ```bash
 # Start development environment

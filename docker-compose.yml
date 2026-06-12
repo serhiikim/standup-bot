@@ -10,10 +10,17 @@ services:
       - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
       - MONGODB_URI=${MONGODB_URI}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_MODEL=${OPENAI_MODEL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+      - AI_API_KEY=${AI_API_KEY}
+      - AI_BASE_URL=${AI_BASE_URL}
+      - AI_MODEL=${AI_MODEL}
+      - SQLITE_DB_PATH=/app/data/standup-bot.db
       - PORT=3000
     volumes:
       - ./logs:/app/logs
+      - sqlite_data:/app/data
     networks:
       - standup-network
 
@@ -61,6 +68,8 @@ services:
 
 volumes:
   mongodb_data:
+    driver: local
+  sqlite_data:
     driver: local
 
 networks:
