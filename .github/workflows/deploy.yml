@@ -23,6 +23,13 @@ jobs:
             
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          tags: tag:ci
         
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
