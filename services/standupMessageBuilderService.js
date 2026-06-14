@@ -11,7 +11,7 @@ class StandupMessageBuilderService {
   createStandupMessage(standup, participants, channel, statusFilter = null) {
     const participantMentions = participants.map(p => this.slackService.formatUserMention(p.id)).join(' ');
     
-    let text = `🚀 **Daily Standup Started!**\n\nPlease respond to the questions below in this thread within ${Math.floor(channel.config.responseTimeout / (1000 * 60 * 60))} hours.`;
+    let text = `🚀 **Daily Standup Started!**\n\nPlease respond to the questions below in this thread before the deadline.`;
     
     if (statusFilter && statusFilter.oooCount > 0) {
       text += `\n\n📴 ${statusFilter.oooCount} team member(s) are currently out of office.`;

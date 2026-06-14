@@ -3,6 +3,7 @@ const { ObjectId } = database;
 const { 
   DEFAULT_STANDUP_QUESTIONS, 
   DEFAULT_STANDUP_TIME, 
+  DEFAULT_DEADLINE_TIME,
   DEFAULT_STANDUP_DAYS,
   DEFAULT_TIMEZONE,
   DEFAULT_RESPONSE_TIMEOUT,
@@ -21,6 +22,7 @@ class Channel {
     this.config = data.config || {
       questions: [...DEFAULT_STANDUP_QUESTIONS],
       time: DEFAULT_STANDUP_TIME,
+      deadlineTime: DEFAULT_DEADLINE_TIME,
       days: [...DEFAULT_STANDUP_DAYS],
       timezone: DEFAULT_TIMEZONE,
       participants: [], // Array of user IDs, empty = all channel members

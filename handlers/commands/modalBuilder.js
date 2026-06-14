@@ -4,7 +4,8 @@ const {
   TIME_OPTIONS,
   DAY_OPTIONS,
   TIMEZONES,
-  DEFAULT_STANDUP_QUESTIONS
+  DEFAULT_STANDUP_QUESTIONS,
+  DEFAULT_DEADLINE_TIME
 } = require('../../utils/constants');
 
 function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
@@ -140,6 +141,43 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
             },
             value: option.value
           }))
+        }
+      },
+
+      // Deadline time selection
+      {
+        type: 'input',
+        block_id: BLOCK_IDS.DEADLINE_TIME_SELECT,
+        label: {
+          type: 'plain_text',
+          text: 'Deadline Time'
+        },
+        element: {
+          type: 'static_select',
+          action_id: BLOCK_IDS.DEADLINE_TIME_SELECT,
+          placeholder: {
+            type: 'plain_text',
+            text: 'Select deadline'
+          },
+          initial_option: (() => {
+            const dt = config.deadlineTime || DEFAULT_DEADLINE_TIME;
+            const match = TIME_OPTIONS.find(t => t.value === dt);
+            return {
+              text: { type: 'plain_text', text: match?.label || '6:00 PM' },
+              value: dt
+            };
+          })(),
+          options: TIME_OPTIONS.map(option => ({
+            text: {
+              type: 'plain_text',
+              text: option.label
+            },
+            value: option.value
+          }))
+        },
+        hint: {
+          type: 'plain_text',
+          text: 'The standup will close at this time (in the selected timezone). Must be after the start time.'
         }
       },
 

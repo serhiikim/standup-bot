@@ -6,11 +6,25 @@ const {
   BLOCK_IDS, 
   LIMITS,
   DEFAULT_STANDUP_QUESTIONS,
-  DEFAULT_STANDUP_TIME,
-  DEFAULT_STANDUP_DAYS,
+  DEFAULT_DEADLINE_TIME,
   DEFAULT_TIMEZONE,
-  DEFAULT_RESPONSE_TIMEOUT
+  DEFAULT_RESPONSE_TIMEOUT,
+  TIME_OPTIONS
 } = require('../utils/constants');
+
+/**
+ * Convert 24h time string to AM/PM display format.
+ * e.g. '18:00' → '6:00 PM', '09:30' → '9:30 AM'
+ */
+function formatTimeAmPm(time24) {
+  const match = TIME_OPTIONS.find(t => t.value === time24);
+  if (match) return match.label;
+  // Fallback: manual conversion
+  const [h, m] = time24.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
 
 let slackService;
 
@@ -75,7 +89,8 @@ function register(app) {
       await slackService.sendDM(userId, 
         `${MESSAGES.SETUP_SUCCESS}\n\n` +
         `📋 Configuration saved for #${channelInfo.name}:\n` +
-        `• Time: ${formData.time} (${formData.timezone})\n` +
+        `• Time: ${formatTimeAmPm(formData.time)} (${formData.timezone})\n` +
+        `• Deadline: ${formatTimeAmPm(formData.deadlineTime)} (${formData.timezone})\n` +
         `• Days: ${formData.daysText}\n` +
         `• Questions: ${formData.questions.length}\n` +
         `• Participants: ${formData.participants.length > 0 ? `${formData.participants.length} specific users` : 'All channel members'}`
@@ -85,7 +100,8 @@ function register(app) {
       try {
         await slackService.postMessage(channelId,
           `✅ Standup configuration ${formData.isUpdate ? 'updated' : 'created'} by ${slackService.formatUserMention(userId)}!\n\n` +
-          `🕒 Standups will run at *${formData.time}* (${formData.timezone}) on *${formData.daysText}*\n` +
+          `🕒 Standups will run at *${formatTimeAmPm(formData.time)}* (${formData.timezone}) on *${formData.daysText}*\n` +
+          `⏰ Deadline: *${formatTimeAmPm(formData.deadlineTime)}* (${formData.timezone})\n` +
           `❓ ${formData.questions.length} questions configured\n` +
           `👥 ${formData.participants.length > 0 ? `${formData.participants.length} specific participants` : 'All channel members can participate'}`
         );
@@ -152,6 +168,21 @@ function validateSetupForm(values) {
       errors[BLOCK_IDS.DAYS_SELECT] = 'Please select at least one day';
       isValid = false;
     }
+
+    // Validate deadline time
+    const deadlineTimeValue = values[BLOCK_IDS.DEADLINE_TIME_SELECT]?.[BLOCK_IDS.DEADLINE_TIME_SELECT]?.selected_option?.value;
+    if (!deadlineTimeValue) {
+      errors[BLOCK_IDS.DEADLINE_TIME_SELECT] = 'Please select a deadline time';
+      isValid = false;
+    } else if (timeValue) {
+      // Validate deadline is after start time
+      const [startH, startM] = timeValue.split(':').map(Number);
+      const [deadH, deadM] = deadlineTimeValue.split(':').map(Number);
+      if (deadH * 60 + deadM <= startH * 60 + startM) {
+        errors[BLOCK_IDS.DEADLINE_TIME_SELECT] = 'Deadline time must be after the start time';
+        isValid = false;
+      }
+    }
   
     return { isValid, errors };
   }
@@ -165,6 +196,9 @@ function validateSetupForm(values) {
   
     // Extract time
     const time = values[BLOCK_IDS.TIME_SELECT][BLOCK_IDS.TIME_SELECT].selected_option.value;
+
+    // Extract deadline time
+    const deadlineTime = values[BLOCK_IDS.DEADLINE_TIME_SELECT]?.[BLOCK_IDS.DEADLINE_TIME_SELECT]?.selected_option?.value || DEFAULT_DEADLINE_TIME;
   
     // Extract days
     const daysOptions = values[BLOCK_IDS.DAYS_SELECT][BLOCK_IDS.DAYS_SELECT].selected_options;
@@ -185,9 +219,10 @@ function validateSetupForm(values) {
     return {
       questions,
       time,
+      deadlineTime,
       days,
       daysText,
-      timezone, // ✅ Now this is the SELECTED timezone, not userTimezone!
+      timezone,
       participants
     };
   }
@@ -211,12 +246,13 @@ function validateSetupForm(values) {
       });
     }
   
-    // Calculate timeout as duration from configured start time (formData.time) until 18:00 (6 PM)
+    // Calculate responseTimeout as fallback (difference between start and deadline)
     let responseTimeout = DEFAULT_RESPONSE_TIMEOUT;
     try {
       const [startHour, startMinute] = formData.time.split(':').map(Number);
+      const [deadHour, deadMinute] = formData.deadlineTime.split(':').map(Number);
       const startMins = startHour * 60 + startMinute;
-      const endMins = 18 * 60; // 6 PM
+      const endMins = deadHour * 60 + deadMinute;
       const diffMins = endMins - startMins;
       if (diffMins > 0) {
         responseTimeout = diffMins * 60 * 1000;
@@ -233,8 +269,9 @@ function validateSetupForm(values) {
       config: {
         questions: formData.questions,
         time: formData.time,
+        deadlineTime: formData.deadlineTime,
         days: formData.days,
-        timezone: formData.timezone, // Taken from the auto-detected value
+        timezone: formData.timezone,
         participants: formData.participants,
         responseTimeout: responseTimeout,
         enableReminders: true,

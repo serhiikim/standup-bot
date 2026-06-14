@@ -56,7 +56,8 @@ class StandupLifecycleService {
         throw new Error('No available participants for standup');
       }
 
-      const responseDeadline = new Date(Date.now() + (channel.config.responseTimeout || DEFAULT_RESPONSE_TIMEOUT));
+      const responseDeadline = this.calculateDeadlineDate(channel);
+      console.log(`📅 Calculated deadline: ${responseDeadline.toISOString()} (deadlineTime: ${channel.config.deadlineTime || 'N/A'}, timezone: ${channel.config.timezone || 'UTC'})`);
       
       const standupData = {
         teamId,
@@ -238,6 +239,100 @@ class StandupLifecycleService {
       console.error('Error getting standup participants:', error);
       throw error;
     }
+  }
+
+  /**
+   * Calculate the response deadline as a real date/time based on the channel's
+   * configured deadlineTime and timezone.
+   * 
+   * For example: deadlineTime = '18:00', timezone = 'America/Los_Angeles'
+   * → returns "today at 6:00 PM LA time" as a UTC Date.
+   * If the deadline has already passed for today, uses tomorrow.
+   * Falls back to duration-based calculation for legacy configs without deadlineTime.
+   */
+  calculateDeadlineDate(channel) {
+    const deadlineTime = channel.config.deadlineTime;
+    const timezone = channel.config.timezone || 'UTC';
+
+    // Legacy fallback: if no deadlineTime configured, use duration-based approach
+    if (!deadlineTime) {
+      return new Date(Date.now() + (channel.config.responseTimeout || DEFAULT_RESPONSE_TIMEOUT));
+    }
+
+    const [deadlineHour, deadlineMinute] = deadlineTime.split(':').map(Number);
+    const now = new Date();
+
+    // Get today's date in the channel's timezone
+    const dateParts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(now);
+
+    const year = dateParts.find(p => p.type === 'year').value;
+    const month = dateParts.find(p => p.type === 'month').value;
+    const day = dateParts.find(p => p.type === 'day').value;
+    const currentHour = parseInt(dateParts.find(p => p.type === 'hour').value);
+    const currentMinute = parseInt(dateParts.find(p => p.type === 'minute').value);
+
+    // Check if deadline has already passed for today in the timezone
+    const isPast = currentHour > deadlineHour ||
+      (currentHour === deadlineHour && currentMinute >= deadlineMinute);
+
+    let targetYear = year;
+    let targetMonth = month;
+    let targetDay = day;
+
+    if (isPast) {
+      // Use tomorrow's date in the timezone
+      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const tmrwParts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(tomorrow);
+
+      targetYear = tmrwParts.find(p => p.type === 'year').value;
+      targetMonth = tmrwParts.find(p => p.type === 'month').value;
+      targetDay = tmrwParts.find(p => p.type === 'day').value;
+    }
+
+    // Build the local datetime string: "YYYY-MM-DDTHH:MM:00"
+    const localDateStr = `${targetYear}-${targetMonth}-${targetDay}T${String(deadlineHour).padStart(2, '0')}:${String(deadlineMinute).padStart(2, '0')}:00`;
+
+    // Convert local time in timezone to UTC using iterative offset refinement
+    // Start by assuming local time = UTC, then refine
+    let utcGuess = new Date(localDateStr + 'Z');
+
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+
+    for (let i = 0; i < 2; i++) {
+      const guessParts = formatter.formatToParts(utcGuess);
+      const guessStr = `${guessParts.find(p => p.type === 'year').value}-${guessParts.find(p => p.type === 'month').value}-${guessParts.find(p => p.type === 'day').value}T${guessParts.find(p => p.type === 'hour').value}:${guessParts.find(p => p.type === 'minute').value}:${guessParts.find(p => p.type === 'second').value}`;
+
+      const guessLocal = new Date(guessStr + 'Z');
+      const wantLocal = new Date(localDateStr + 'Z');
+      const diffMs = guessLocal.getTime() - wantLocal.getTime();
+
+      if (diffMs === 0) break;
+      utcGuess = new Date(utcGuess.getTime() - diffMs);
+    }
+
+    return utcGuess;
   }
 }
 

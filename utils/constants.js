@@ -8,6 +8,7 @@ const DEFAULT_STANDUP_QUESTIONS = [
   
   // Time and scheduling constants
   const DEFAULT_STANDUP_TIME = "09:00";
+  const DEFAULT_DEADLINE_TIME = "18:00";
   const DEFAULT_RESPONSE_TIMEOUT = 3 * 60 * 60 * 1000; // 3 hours in milliseconds
   const DEFAULT_TIMEZONE = "UTC";
   
@@ -80,6 +81,7 @@ const DEFAULT_STANDUP_QUESTIONS = [
     SETUP_MODAL: 'standup_setup_modal',
     QUESTIONS_INPUT: 'questions_input',
     TIME_SELECT: 'time_select',
+    DEADLINE_TIME_SELECT: 'deadline_time_select',
     DAYS_SELECT: 'days_select',
     PARTICIPANTS_SELECT: 'participants_select',
     TIMEZONE_SELECT: 'timezone_select',
@@ -121,6 +123,7 @@ const DEFAULT_STANDUP_QUESTIONS = [
   module.exports = {
     DEFAULT_STANDUP_QUESTIONS,
     DEFAULT_STANDUP_TIME,
+    DEFAULT_DEADLINE_TIME,
     DEFAULT_RESPONSE_TIMEOUT,
     DEFAULT_TIMEZONE,
     WEEKDAYS,
