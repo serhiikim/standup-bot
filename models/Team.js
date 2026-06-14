@@ -20,9 +20,9 @@ class Team {
       reminderInterval: 60 * 60 * 1000 // 1 hour
     };
     this.isActive = data.isActive !== undefined ? data.isActive : true;
-    this.createdAt = data.createdAt || new Date();
-    this.updatedAt = data.updatedAt || new Date();
-    this.lastActiveAt = data.lastActiveAt || new Date();
+    this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
+    this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+    this.lastActiveAt = data.lastActiveAt ? new Date(data.lastActiveAt) : new Date();
   }
 
   // Static methods for database operations

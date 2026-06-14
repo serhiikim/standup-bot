@@ -58,6 +58,8 @@ class StandupReminderService {
         } else {
           standup.clearReminders();
         }
+      } else {
+        standup.clearReminders();
       }
       await standup.save();
 

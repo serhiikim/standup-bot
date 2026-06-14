@@ -16,10 +16,10 @@ class Standup {
     this.actualParticipants = data.actualParticipants || []; // Users who responded
     
     // Timing
-    this.scheduledDate = data.scheduledDate; // When it was supposed to start
-    this.startedAt = data.startedAt || new Date();
-    this.responseDeadline = data.responseDeadline; // When responses should stop
-    this.completedAt = data.completedAt || null;
+    this.scheduledDate = data.scheduledDate ? new Date(data.scheduledDate) : null;
+    this.startedAt = data.startedAt ? new Date(data.startedAt) : new Date();
+    this.responseDeadline = data.responseDeadline ? new Date(data.responseDeadline) : null;
+    this.completedAt = data.completedAt ? new Date(data.completedAt) : null;
     
     // Status and control
     this.status = data.status || STANDUP_STATUS.ACTIVE;
@@ -44,12 +44,15 @@ class Standup {
       sent: [],
       nextReminderAt: null
     };
+    if (this.reminders.nextReminderAt) {
+      this.reminders.nextReminderAt = new Date(this.reminders.nextReminderAt);
+    }
 
     // OOO information
     this.oooInfo = data.oooInfo || null;
     
-    this.createdAt = data.createdAt || new Date();
-    this.updatedAt = data.updatedAt || new Date();
+    this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
+    this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
   }
 
   // Static methods for database operations

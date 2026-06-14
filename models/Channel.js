@@ -41,10 +41,13 @@ class Channel {
       avgResponseRate: 0,
       avgResponseTime: 0
     };
+    if (this.stats.lastStandupDate) {
+      this.stats.lastStandupDate = new Date(this.stats.lastStandupDate);
+    }
     
-    this.createdAt = data.createdAt || new Date();
-    this.updatedAt = data.updatedAt || new Date();
-    this.lastStandupAt = data.lastStandupAt || null;
+    this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
+    this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+    this.lastStandupAt = data.lastStandupAt ? new Date(data.lastStandupAt) : null;
   }
 
   // Static methods for database operations

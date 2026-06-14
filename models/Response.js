@@ -23,14 +23,14 @@ class Response {
     this.editCount = data.editCount || 0; // Number of times edited
     
     // Timing
-    this.submittedAt = data.submittedAt || new Date();
-    this.lastEditedAt = data.lastEditedAt || null;
+    this.submittedAt = data.submittedAt ? new Date(data.submittedAt) : new Date();
+    this.lastEditedAt = data.lastEditedAt ? new Date(data.lastEditedAt) : null;
     this.responseTime = data.responseTime || null; // Time taken to respond (ms from standup start)
     
-
+ 
     
-    this.createdAt = data.createdAt || new Date();
-    this.updatedAt = data.updatedAt || new Date();
+    this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
+    this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
   }
 
   // Static methods for database operations
