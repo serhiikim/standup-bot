@@ -93,14 +93,21 @@ const DEFAULT_STANDUP_QUESTIONS = [
   // Time zones (common ones)
   const TIMEZONES = timezoneHelper.createTimezoneList();
   
-  // Time options for standup (24-hour format)
+  // Time options for standup (24-hour format, 6:00 AM to 11:30 PM)
   const TIME_OPTIONS = [];
-  for (let hour = 6; hour <= 24; hour++) {
+  for (let hour = 6; hour <= 23; hour++) {
     for (let minute = 0; minute < 60; minute += 30) {
       const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      const displayTime = hour < 12 
-        ? `${hour === 0 ? 12 : hour}:${minute.toString().padStart(2, '0')} AM`
-        : `${hour === 12 ? 12 : hour - 12}:${minute.toString().padStart(2, '0')} PM`;
+      let displayTime;
+      if (hour === 0) {
+        displayTime = `12:${minute.toString().padStart(2, '0')} AM`;
+      } else if (hour < 12) {
+        displayTime = `${hour}:${minute.toString().padStart(2, '0')} AM`;
+      } else if (hour === 12) {
+        displayTime = `12:${minute.toString().padStart(2, '0')} PM`;
+      } else {
+        displayTime = `${hour - 12}:${minute.toString().padStart(2, '0')} PM`;
+      }
       
       TIME_OPTIONS.push({
         value: timeString,
