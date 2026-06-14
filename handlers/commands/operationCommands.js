@@ -148,6 +148,74 @@ function register(app) {
       });
     }
   });
+
+  // /standup-disable command
+  app.command('/standup-disable', async ({ command, ack, respond }) => {
+    await ack();
+
+    try {
+      const { team_id, channel_id, user_id } = command;
+
+      if (isDMChannel(channel_id)) {
+        return respond({
+          text: `🚫 *Disable Standups in Channels Only*\n\n` +
+                `Go to the channel where you want to disable standups and use \`/standup-disable\` there.`,
+          response_type: 'ephemeral'
+        });
+      }
+
+      console.log(`🚫 Disable command received for channel ${channel_id} by user ${user_id}`);
+
+      const channel = await Channel.findByChannelId(team_id, channel_id);
+
+      if (!channel) {
+        return respond({
+          text: `❌ No standup configuration found for this channel.\n\n💡 Nothing to disable — standups were never set up here.`,
+          response_type: 'ephemeral'
+        });
+      }
+
+      if (!channel.isActive) {
+        return respond({
+          text: `ℹ️ Standups are already disabled for this channel.\n\n💡 To re-enable, run \`/standup-setup\`.`,
+          response_type: 'ephemeral'
+        });
+      }
+
+      // Cancel any active standup first
+      const activeStandups = await Standup.findActiveByChannel(team_id, channel_id);
+      for (const standup of activeStandups) {
+        const standupInstance = new Standup(standup);
+        standupInstance.updateStatus('cancelled');
+        standupInstance.clearReminders();
+        await standupInstance.save();
+        console.log(`⏹️ Cancelled active standup ${standup._id}`);
+      }
+
+      // Disable the channel config
+      await Channel.updateByChannelId(team_id, channel_id, {
+        isActive: false,
+        status: 'disabled'
+      });
+
+      console.log(`✅ Standups disabled for channel ${channel_id}`);
+
+      return respond({
+        text: `🚫 *Standups Disabled*\n\n` +
+              `Scheduled standups have been turned off for this channel.` +
+              (activeStandups.length > 0 ? `\n⏹️ ${activeStandups.length} active standup(s) cancelled.` : '') +
+              `\n\n💡 To re-enable, run \`/standup-setup\`. Your configuration will be preserved.`,
+        response_type: 'ephemeral'
+      });
+
+    } catch (error) {
+      console.error('Error in /standup-disable command:', error);
+      return respond({
+        text: '❌ Failed to disable standups. Please try again.',
+        response_type: 'ephemeral'
+      });
+    }
+  });
 }
 
 module.exports = { register }; 
