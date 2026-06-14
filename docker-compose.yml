@@ -1,7 +1,7 @@
 services:
   standup-bot:
-    image: slack-standup-bot:latest  
-    container_name: slack-standup-bot
+    image: standup-bot:latest  
+    container_name: standup-bot
     restart: unless-stopped
     environment:
       - NODE_ENV=${NODE_ENV:-production}
