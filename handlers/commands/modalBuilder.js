@@ -25,6 +25,25 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
     ? `Current timezone: *${timezoneHelper.getTimezoneLabel(defaultTimezone)}*`
     : `Auto-detected timezone: *${timezoneHelper.getTimezoneLabel(defaultTimezone)}*`;
 
+  // Build timezone options and ensure the default/detected one is in the list
+  const timezoneOptions = TIMEZONES.map(tz => ({
+    text: {
+      type: 'plain_text',
+      text: tz.label
+    },
+    value: tz.value
+  }));
+  const hasDefault = timezoneOptions.some(o => o.value === defaultTimezone);
+  if (!hasDefault) {
+    timezoneOptions.unshift({
+      text: {
+        type: 'plain_text',
+        text: timezoneHelper.getTimezoneLabel(defaultTimezone)
+      },
+      value: defaultTimezone
+    });
+  }
+
   return {
     type: 'modal',
     callback_id: BLOCK_IDS.SETUP_MODAL,
@@ -182,13 +201,7 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
             },
             value: defaultTimezone
           },
-          options: TIMEZONES.map(tz => ({
-            text: {
-              type: 'plain_text',
-              text: tz.label
-            },
-            value: tz.value
-          }))
+          options: timezoneOptions
         }
       },
 
