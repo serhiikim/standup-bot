@@ -13,17 +13,29 @@ function register(app) {
   // Handle messages in threads (for standup responses)
   app.event('message', async ({ event, client }) => {
     try {
+      // Allow message_changed subtype for native Slack edits
+      const isNativeEdit = event.subtype === 'message_changed';
+
+      if (event.subtype && !isNativeEdit) {
+        return;
+      }
+
+      // For native edits, message data is nested under event.message
+      const messageData = isNativeEdit ? event.message : event;
+
       // Only process threaded messages
-      if (!event.thread_ts || event.subtype) {
+      if (!messageData.thread_ts) {
         return;
       }
 
       // Skip bot messages
-      if (event.bot_id) {
+      if (messageData.bot_id) {
         return;
       }
 
-      const { team, channel, user, text, ts, thread_ts } = event;
+      const { user, text, ts, thread_ts } = messageData;
+      const team = event.team || messageData.team;
+      const channel = event.channel;
 
       // Check if this is a response to an active standup
       const standup = await Standup.findByThreadTs(team, thread_ts);
@@ -51,15 +63,17 @@ function register(app) {
         await existingResponse.save();
         responseAction = 'updated';
 
-        // React to show update received
-        await client.reactions.add({
-          channel: channel,
-          timestamp: ts,
-          name: 'pencil2' // Edit emoji
-        });
+        // React to show update received (skip for native edits — the original ✅ is already there)
+        if (!isNativeEdit) {
+          await client.reactions.add({
+            channel: channel,
+            timestamp: ts,
+            name: 'pencil2' // Edit emoji
+          });
+        }
 
-      } else {
-        // Create new response
+      } else if (!isNativeEdit) {
+        // Create new response (only for new messages, not native edits)
         const responseData = {
           standupId: standup._id,
           teamId: team,
@@ -88,6 +102,9 @@ function register(app) {
           timestamp: ts,
           name: 'white_check_mark'
         });
+      } else {
+        // Native edit on a message we don't have a response for — ignore
+        return;
       }
 
       console.log(`Standup response ${responseAction} from ${userInfo.name}`);
