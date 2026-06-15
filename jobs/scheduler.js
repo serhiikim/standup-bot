@@ -240,16 +240,16 @@ class Scheduler {
     try {
       console.log('🧹 Starting daily cleanup...');
       
-      // Example: Delete standups older than 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Delete standups older than 90 days
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
       const Standup = require('../models/Standup');
       const Response = require('../models/Response');
 
       // Find old standups
       const oldStandups = await Standup.getCollection().find({
-        createdAt: { $lt: thirtyDaysAgo },
+        createdAt: { $lt: ninetyDaysAgo },
         status: { $in: ['completed', 'cancelled', 'expired'] }
       }).toArray();
 
