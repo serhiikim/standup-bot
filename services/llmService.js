@@ -83,28 +83,25 @@ class LLMService {
         messages: [
           {
             role: "system",
-            content: "You are an AI assistant that analyzes team standup responses and creates concise, helpful summaries. When you see user mentions like <@U123>, preserve them in your response. You can understand and analyze responses in any language - just provide your analysis in English using the requested format."
+            content: "You are an AI assistant that analyzes team standup responses and creates a cohesive, well-formatted summary of their work. Preserve user mentions like <@U123> exactly as they are. Always output the final summary in English using Slack formatting (mrkdwn) such as bold text (*text*), bullet points, and clean spacing."
           },
           {
             role: "user",
             content: prompt
           }
         ],
-        max_tokens: 800,
+        max_tokens: 1000,
         temperature: 0.3
       });
 
-      const analysis = completion.choices[0].message.content;
-      
-      // Parse the structured response
-      const parsedAnalysis = this.parseStructuredAnalysis(analysis);
+      const analysis = completion.choices[0].message.content.trim();
       
       return {
-        summary: parsedAnalysis.summary,
-        blockers: parsedAnalysis.blockers,
-        achievements: parsedAnalysis.achievements,
-        nextSteps: parsedAnalysis.nextSteps,
-        teamMood: parsedAnalysis.teamMood,
+        summary: analysis,
+        blockers: [],
+        achievements: [],
+        nextSteps: [],
+        questionSummaries: [],
         rawAnalysis: analysis,
         generatedBy: this.getProviderName(),
         generatedAt: new Date()
@@ -121,7 +118,9 @@ class LLMService {
    */
   createAnalysisPrompt(questions, responsesText) {
     return `
-Please analyze the following standup responses and provide a structured summary. The responses may be in any language - please analyze them accurately and provide your response in English.
+Please analyze the following team standup responses and generate a well-structured summary. 
+
+The summary should follow the template/format of the standup questions naturally. Organize the summary by grouping the team's updates under appropriate headers or categories corresponding to the questions asked, and summarize the achievements, status, or blockers reported.
 
 STANDUP QUESTIONS:
 ${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
@@ -129,143 +128,26 @@ ${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
 TEAM RESPONSES:
 ${responsesText}
 
-Please provide your analysis in the following format:
-
-**SUMMARY:**
-[2-3 sentences summarizing the key points from all responses]
-
-**ACHIEVEMENTS:**
-[List 2-3 specific accomplishments mentioned by team members]
-
-**BLOCKERS:**
-[List any specific blockers, challenges, or issues mentioned]
-
-**NEXT STEPS:**
-[Key tasks or priorities mentioned for today/upcoming work]
-
-**TEAM MOOD:**
-[One word: positive, neutral, or negative, with brief explanation]
-
-Keep each section concise and focus on actionable insights. If no items are found for a category, you can leave it empty or write "None mentioned".
+Instructions for output formatting:
+1. Choose the formatting layout dynamically based on the standup's questions and responses.
+2. Use Slack Markdown (mrkdwn) like *bold* headers, list items, and emojis for layout structure. Do NOT use standard Markdown headers like '#' or '##'.
+3. Keep the summary concise, readable, and focused on key achievements, active work, and active blockers.
+4. Preserve and use team member Slack mentions (like <@U123456>) in your summary when attributing work or blockers.
+5. Return ONLY the final formatted summary text.
 `;
   }
 
   /**
-   * Parse structured analysis response from LLM
+   * Parse structured analysis response from LLM (deprecated - returns raw summary)
    */
   parseStructuredAnalysis(analysisText) {
-    const sections = {
-      summary: '',
+    return {
+      summary: analysisText,
       achievements: [],
       blockers: [],
       nextSteps: [],
-      teamMood: 'neutral'
+      questionSummaries: []
     };
-
-    try {
-      const lines = analysisText.split('\n');
-      let currentSection = '';
-      
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        
-        // Check for section headers
-        if (trimmedLine.includes('**SUMMARY:**')) {
-          currentSection = 'summary';
-          continue;
-        } else if (trimmedLine.includes('**ACHIEVEMENTS:**')) {
-          currentSection = 'achievements';
-          continue;
-        } else if (trimmedLine.includes('**BLOCKERS:**')) {
-          currentSection = 'blockers';
-          continue;
-        } else if (trimmedLine.includes('**NEXT STEPS:**')) {
-          currentSection = 'nextSteps';
-          continue;
-        } else if (trimmedLine.includes('**TEAM MOOD:**')) {
-          currentSection = 'teamMood';
-          continue;
-        }
-        
-        // Process content for each section
-        if (trimmedLine && !trimmedLine.startsWith('**')) {
-          if (currentSection === 'summary') {
-            sections.summary += (sections.summary ? ' ' : '') + trimmedLine;
-          } else if (currentSection === 'teamMood') {
-            // Extract mood from the line
-            const moodMatch = trimmedLine.toLowerCase().match(/\b(positive|negative|neutral)\b/);
-            if (moodMatch) {
-              sections.teamMood = moodMatch[1];
-            }
-          } else if (currentSection && ['achievements', 'blockers', 'nextSteps'].includes(currentSection)) {
-            // Clean up bullet points and add to array
-            const cleanLine = trimmedLine
-              .replace(/^[-•*]\s*/, '') // Remove bullet points
-              .replace(/^\d+\.\s*/, '') // Remove numbered lists
-              .trim();
-            
-            if (cleanLine && cleanLine.length > 3 && !cleanLine.toLowerCase().includes('none mentioned')) {
-              sections[currentSection].push(cleanLine);
-            }
-          }
-        }
-      }
-      
-      return sections;
-      
-    } catch (error) {
-      console.error('Error parsing structured analysis:', error);
-      
-      // If parsing fails completely, try to extract what we can
-      return {
-        summary: analysisText.length > 200 ? analysisText.substring(0, 200) + '...' : analysisText,
-        achievements: [],
-        blockers: [],
-        nextSteps: [],
-        teamMood: 'neutral'
-      };
-    }
-  }
-
-  /**
-   * Analyze team sentiment across all responses
-   */
-  async analyzeTeamSentiment(responses) {
-    if (!this.isEnabled || responses.length === 0) {
-      return 'neutral';
-    }
-
-    try {
-      const allResponsesText = responses.map(r => r.responses.join(' ')).join('\n');
-      
-      const completion = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: "system",
-            content: "Analyze the overall sentiment of these standup responses. Consider the tone, language, and content. Respond with only: positive, negative, or neutral."
-          },
-          {
-            role: "user",
-            content: allResponsesText
-          }
-        ],
-        max_tokens: 10,
-        temperature: 0
-      });
-
-      const sentiment = completion.choices[0].message.content.toLowerCase().trim();
-      
-      if (['positive', 'negative', 'neutral'].includes(sentiment)) {
-        return sentiment;
-      }
-      
-      return 'neutral';
-
-    } catch (error) {
-      console.error('Error analyzing team sentiment:', error);
-      return 'neutral';
-    }
   }
 
   /**
@@ -292,7 +174,6 @@ Keep each section concise and focus on actionable insights. If no items are foun
       blockers: [],
       achievements: [],
       nextSteps: [],
-      teamMood: 'neutral',
       generatedBy: 'fallback',
       generatedAt: new Date()
     };

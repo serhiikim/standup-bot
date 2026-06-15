@@ -199,38 +199,6 @@ class StandupMessageBuilderService {
           text: { type: 'mrkdwn', text: `🤖 *AI Summary:*\n${aiAnalysis.summary}` }
         });
       }
-
-      const fields = [];
-      if (aiAnalysis.achievements && aiAnalysis.achievements.length > 0) {
-        const achievementsText = aiAnalysis.achievements.slice(0, 3).map(a => `• ${a}`).join('\n');
-        fields.push({ type: 'mrkdwn', text: `*🎉 Achievements:*\n${achievementsText}` });
-      }
-      
-      if (aiAnalysis.blockers && aiAnalysis.blockers.length > 0) {
-        const blockersText = aiAnalysis.blockers.slice(0, 3).map(b => `• ${b}`).join('\n');
-        fields.push({ type: 'mrkdwn', text: `*🚫 Blockers:*\n${blockersText}` });
-      }
-      
-      if (aiAnalysis.nextSteps && aiAnalysis.nextSteps.length > 0) {
-        const nextStepsText = aiAnalysis.nextSteps.slice(0, 3).map(n => `• ${n}`).join('\n');
-        fields.push({ type: 'mrkdwn', text: `*📋 Next Steps:*\n${nextStepsText}` });
-      }
-      
-      if (fields.length > 0) {
-        for (let i = 0; i < fields.length; i += 2) {
-          blocks.push({ type: 'section', fields: fields.slice(i, i + 2) });
-        }
-      }
-      
-      if (aiAnalysis.teamMood) {
-        const moodEmoji = { positive: '😊', neutral: '😐', negative: '😟' };
-        blocks.push({
-          type: 'context',
-          elements: [
-            { type: 'mrkdwn', text: `Team mood: ${moodEmoji[aiAnalysis.teamMood] || '😐'} *${aiAnalysis.teamMood.charAt(0).toUpperCase() + aiAnalysis.teamMood.slice(1)}*` }
-          ]
-        });
-      }
     } else if (responses.length > 0) {
       blocks.push({
         type: 'context',
