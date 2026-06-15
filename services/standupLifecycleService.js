@@ -115,7 +115,10 @@ class StandupLifecycleService {
       }
       
       if (channel.config.enableReminders) {
-        const reminderTime = new Date(Date.now() + channel.config.reminderInterval);
+        // First reminder starts 3 hours before the response deadline
+        const threeHoursBeforeDeadline = new Date(responseDeadline.getTime() - 3 * 60 * 60 * 1000);
+        // If 3 hours before deadline is in the past, schedule it immediately
+        const reminderTime = threeHoursBeforeDeadline > new Date() ? threeHoursBeforeDeadline : new Date();
         standupInstance.setNextReminder(reminderTime);
         await standupInstance.save();
       }
