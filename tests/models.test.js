@@ -218,4 +218,24 @@ describe('Models Database CRUD Verification', () => {
     assert.strictEqual(result.isValid, true, 'should be valid without accessToken');
     assert.strictEqual(result.errors.length, 0, 'should have no errors');
   });
+
+  test('parseRawMessage stores raw message without splitting', () => {
+    const questions = ['Yesterday?', 'Today?', 'Blockers?'];
+
+    const response = new Response({
+      standupId: 'test', teamId: 'T1', channelId: 'C1',
+      userId: 'U1', username: 'alice'
+    });
+
+    const message = '1. Fixed auth bug\nAlso reviewed PRs\n2. Working on tests\n3. None';
+    response.parseRawMessage(message, questions);
+
+    // Raw message is preserved exactly
+    assert.strictEqual(response.rawMessage, message);
+    // responses array holds the full message as a single entry
+    assert.strictEqual(response.responses.length, 1);
+    assert.strictEqual(response.responses[0], message);
+    // Any submission is complete
+    assert.strictEqual(response.isComplete, true);
+  });
 });

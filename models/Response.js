@@ -150,17 +150,10 @@ class Response {
   }
 
   parseRawMessage(message, questions) {
-    // Simple parsing logic - can be enhanced
     this.rawMessage = message;
-    const lines = message.split('\n').filter(line => line.trim());
-    
-    // Try to match responses to questions
-    const newResponses = [];
-    for (let i = 0; i < questions.length; i++) {
-      newResponses.push(lines[i] || '');
-    }
-    
-    this.responses = newResponses;
+    // Store the full message as a single response — the LLM handles
+    // question-to-answer mapping when generating the standup summary.
+    this.responses = [message];
     this.checkCompletion();
     this.updatedAt = new Date();
   }

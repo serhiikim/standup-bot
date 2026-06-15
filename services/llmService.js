@@ -72,8 +72,7 @@ class LLMService {
         const userMention = slackService ? 
           slackService.formatUserMention(response.userId) : 
           response.userDisplayName || response.username;
-        const answers = response.responses.join('\n');
-        return `${userMention}:\n${answers}`;
+        return `${userMention}:\n${response.rawMessage}`;
       }).join('\n\n---\n\n');
 
       const prompt = this.createAnalysisPrompt(standup.questions, responsesText);
