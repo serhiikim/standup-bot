@@ -93,9 +93,9 @@ const DEFAULT_STANDUP_QUESTIONS = [
   // Time zones (common ones)
   const TIMEZONES = timezoneHelper.createTimezoneList();
   
-  // Time options for standup (24-hour format, 6:00 AM to 11:30 PM)
+  // Time options for standup (24-hour format, 3:00 AM to 11:30 PM)
   const TIME_OPTIONS = [];
-  for (let hour = 6; hour <= 23; hour++) {
+  for (let hour = 3; hour <= 23; hour++) {
     for (let minute = 0; minute < 60; minute += 30) {
       const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
       let displayTime;
