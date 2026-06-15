@@ -16,13 +16,14 @@ function isDMChannel(channelId) {
   async function getUserPendingStandups(teamId, userId) {
     const Standup = require('../models/Standup');
     const Response = require('../models/Response');
+    const { STANDUP_STATUS } = require('../utils/constants');
     
     // Find active standups where user is expected to participate
     let activeStandups;
     try {
       activeStandups = await Standup.getCollection().find({
         teamId: teamId,
-        status: { $in: ['active', 'collecting'] },
+        status: { $in: [STANDUP_STATUS.ACTIVE, STANDUP_STATUS.COLLECTING] },
         expectedParticipants: userId
       }).toArray();
     } catch (error) {

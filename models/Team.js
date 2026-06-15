@@ -140,9 +140,7 @@ class Team {
       errors.push('teamName is required');
     }
     
-    if (!data.accessToken) {
-      errors.push('accessToken is required');
-    }
+
     
     return {
       isValid: errors.length === 0,

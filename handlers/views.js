@@ -241,7 +241,6 @@ function validateSetupForm(values) {
         teamName: `Team-${teamId}`, // Placeholder name
         teamDomain: 'unknown',
         installedBy: userId,
-        accessToken: '', // This should be set during OAuth
         isActive: true
       });
     }
@@ -296,22 +295,5 @@ function validateSetupForm(values) {
     // Update team's last active timestamp
     await Team.updateLastActive(teamId);
   }
-
-function extractChannelIdFromContext(body) {
-  // Try to extract channel ID from various sources in the body
-  // This is a fallback - ideally we'd pass it in private_metadata
-  if (body.view?.private_metadata) {
-    try {
-      const metadata = JSON.parse(body.view.private_metadata);
-      return metadata.channelId;
-    } catch (e) {
-      // Fall back to other methods
-    }
-  }
-  
-  // Could also be in trigger context, but this requires modification
-  // of the command handler to pass it
-  return null;
-}
 
 module.exports = { register };

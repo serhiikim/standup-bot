@@ -7,6 +7,9 @@ const StandupService = require('../services/standupService');
 let slackService;
 let standupService;
 
+// In-memory lock to prevent concurrent processing of messages from the same user
+const processingLocks = new Set();
+
 function register(app) {
   slackService = new SlackService(app);
   standupService = new StandupService(app);
@@ -48,6 +51,14 @@ function register(app) {
         return;
       }
 
+      // Prevent concurrent processing for the same user+standup
+      const lockKey = `${standup._id}:${user}`;
+      if (processingLocks.has(lockKey)) {
+        return;
+      }
+      processingLocks.add(lockKey);
+
+      try {
       // Get user info for better display
       const userInfo = await slackService.getUserInfo(user);
       
@@ -117,6 +128,10 @@ function register(app) {
         console.log(`📊 Standup completion check result:`, completionResult);
       } else {
         console.error(`❌ Standup completion check failed:`, completionResult.error);
+      }
+
+      } finally {
+        processingLocks.delete(lockKey);
       }
 
     } catch (error) {

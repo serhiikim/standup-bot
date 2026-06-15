@@ -103,25 +103,26 @@ class StandupReminderService {
       reminderText += `\n\nPlease post your update in the <${standupUrl}|standup thread>.`;
     }
 
-    // Send DMs in parallel with error handling
-    const dmPromises = missingParticipants.map(async (userId) => {
+    // Send DMs sequentially with a small delay to avoid Slack rate limits
+    const results = [];
+    for (const userId of missingParticipants) {
       try {
         await this.slackService.sendDM(userId, reminderText);
-        return { userId, success: true };
+        results.push({ userId, success: true });
       } catch (error) {
         console.error(`Failed to send DM reminder to user ${userId}:`, error);
-        return { userId, success: false, error: error.message };
+        results.push({ userId, success: false, error: error.message });
       }
-    });
-
-    const results = await Promise.allSettled(dmPromises);
+      // 300ms delay between DMs to stay under Slack rate limits
+      if (missingParticipants.length > 1) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
     
     // Collect successful user IDs and add reminders sequentially to avoid race conditions
     const successfulUserIds = results
-      .filter(result => 
-        result.status === 'fulfilled' && result.value.success
-      )
-      .map(result => result.value.userId);
+      .filter(r => r.success)
+      .map(r => r.userId);
 
     // Add reminders sequentially to avoid race conditions on standup object
     for (const userId of successfulUserIds) {
@@ -129,19 +130,12 @@ class StandupReminderService {
     }
 
     // Log any failures
-    const failures = results.filter(result => 
-      result.status === 'rejected' || 
-      (result.status === 'fulfilled' && !result.value.success)
-    );
+    const failures = results.filter(r => !r.success);
 
     if (failures.length > 0) {
       console.warn(`Failed to send ${failures.length}/${missingParticipants.length} DM reminders for standup ${standupId}`);
-      failures.forEach(failure => {
-        if (failure.status === 'fulfilled') {
-          console.warn(`- User ${failure.value.userId}: ${failure.value.error}`);
-        } else {
-          console.warn(`- Promise rejected: ${failure.reason}`);
-        }
+      failures.forEach(f => {
+        console.warn(`- User ${f.userId}: ${f.error}`);
       });
     }
 

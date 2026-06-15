@@ -79,22 +79,32 @@ function matchQuery(doc, query) {
       for (const [op, opVal] of Object.entries(value)) {
         if (op === '$in') {
           if (!Array.isArray(opVal)) return false;
-          const docValStr = docValue ? String(docValue) : '';
-          const match = opVal.some(val => String(val) === docValStr);
-          if (!match) return false;
+          if (Array.isArray(docValue)) {
+            // Document value is an array — check if any element is in opVal
+            const match = docValue.some(dv => opVal.some(ov => String(dv) === String(ov)));
+            if (!match) return false;
+          } else {
+            const docValStr = docValue ? String(docValue) : '';
+            const match = opVal.some(val => String(val) === docValStr);
+            if (!match) return false;
+          }
         } else if (op === '$lt') {
+          if (docValue === null || docValue === undefined) return false;
           const dVal = docValue instanceof Date ? docValue : new Date(docValue);
           const oVal = opVal instanceof Date ? opVal : new Date(opVal);
           if (!(dVal < oVal)) return false;
         } else if (op === '$lte') {
+          if (docValue === null || docValue === undefined) return false;
           const dVal = docValue instanceof Date ? docValue : new Date(docValue);
           const oVal = opVal instanceof Date ? opVal : new Date(opVal);
           if (!(dVal <= oVal)) return false;
         } else if (op === '$gt') {
+          if (docValue === null || docValue === undefined) return false;
           const dVal = docValue instanceof Date ? docValue : new Date(docValue);
           const oVal = opVal instanceof Date ? opVal : new Date(opVal);
           if (!(dVal > oVal)) return false;
         } else if (op === '$gte') {
+          if (docValue === null || docValue === undefined) return false;
           const dVal = docValue instanceof Date ? docValue : new Date(docValue);
           const oVal = opVal instanceof Date ? opVal : new Date(opVal);
           if (!(dVal >= oVal)) return false;

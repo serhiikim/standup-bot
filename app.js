@@ -211,8 +211,11 @@ async function startApp() {
     // Automatically update any active standups to new reminder schedule
     await updateActiveStandupReminders();
     
-    // Reconcile any native Slack edits missed before message_changed handler was deployed
-    await reconcileNativeEdits();
+    // One-time reconciliation of native Slack edits missed before message_changed handler.
+    // Set RECONCILE_NATIVE_EDITS=false to skip after the first successful deploy.
+    if (process.env.RECONCILE_NATIVE_EDITS !== 'false') {
+      await reconcileNativeEdits();
+    }
     
     // Initialize all handlers
     initializeHandlers();

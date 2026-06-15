@@ -161,19 +161,7 @@ class Scheduler {
       });
       const todayStr = formatter.format(now); // YYYY-MM-DD in channel TZ
       
-      // Build start/end of day in channel timezone
-      const startOfDay = new Date(`${todayStr}T00:00:00`);
-      const endOfDay = new Date(`${todayStr}T23:59:59.999`);
-      
-      // Convert to UTC for DB query by creating dates in the channel TZ
-      const startFormatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: channelTimezone,
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-        hour12: false
-      });
-      
-      // Use a simpler approach: query a generous window (last 24h) and check
+      // Query a generous window (last 24h) and check calendar day in timezone
       const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
       const Standup = require('../models/Standup');
