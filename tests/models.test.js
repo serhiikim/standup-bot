@@ -33,7 +33,6 @@ describe('Models Database CRUD Verification', () => {
     const team = await Team.create({
       teamId: 'T_TEST_1',
       teamName: 'Team One',
-      accessToken: 'xoxb-test',
       installedBy: 'U_TEST'
     });
 
@@ -162,5 +161,61 @@ describe('Models Database CRUD Verification', () => {
     const checkResp = await Response.findById(response._id);
     assert.strictEqual(checkStandup, null);
     assert.strictEqual(checkResp, null);
+  });
+
+  test('Response checkCompletion always marks complete', () => {
+    // Any submission should be treated as complete
+    const fullResponse = new Response({
+      standupId: 'test',
+      teamId: 'T1',
+      channelId: 'C1',
+      userId: 'U1',
+      username: 'alice',
+      responses: ['answer1', 'answer2']
+    });
+    fullResponse.checkCompletion();
+    assert.strictEqual(fullResponse.isComplete, true, 'full response should be complete');
+
+    // Even partial responses should be marked complete
+    const partialResponse = new Response({
+      standupId: 'test',
+      teamId: 'T1',
+      channelId: 'C1',
+      userId: 'U2',
+      username: 'bob',
+      responses: ['answer1', ''] // second answer empty
+    });
+    partialResponse.checkCompletion();
+    assert.strictEqual(partialResponse.isComplete, true, 'partial response should also be complete');
+  });
+
+  test('Response markAsEdited sets edit metadata', () => {
+    const response = new Response({
+      standupId: 'test',
+      teamId: 'T1',
+      channelId: 'C1',
+      userId: 'U1',
+      username: 'alice',
+      responses: ['original answer']
+    });
+
+    assert.strictEqual(response.isEdited, false, 'should not be edited initially');
+    
+    response.markAsEdited();
+    assert.strictEqual(response.isEdited, true, 'should be marked as edited');
+    assert.ok(response.lastEditedAt instanceof Date, 'lastEditedAt should be a Date');
+    assert.strictEqual(response.editCount, 1, 'editCount should be 1');
+
+    response.markAsEdited();
+    assert.strictEqual(response.editCount, 2, 'editCount should increment');
+  });
+
+  test('Team validation does not require accessToken', () => {
+    const result = Team.validate({
+      teamId: 'T1',
+      teamName: 'Test Team'
+    });
+    assert.strictEqual(result.isValid, true, 'should be valid without accessToken');
+    assert.strictEqual(result.errors.length, 0, 'should have no errors');
   });
 });

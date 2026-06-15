@@ -141,4 +141,94 @@ describe('Database Adapter (SQLite Mock Mongo)', () => {
     const deleted = await col.deleteMany({ status: { $in: ['active', 'collecting', 'completed'] } });
     assert.strictEqual(deleted.deletedCount, 3, 'should delete all 3 standups');
   });
+
+  test('date comparison operators should reject null/undefined values', async () => {
+    const col = database.getDb().collection('standups');
+    await col.deleteMany({});
+
+    // Simulate a standup with nextReminderAt = null (cleared reminder)
+    await col.insertOne({ status: 'active', nextReminderAt: null, label: 'cleared' });
+    // Simulate a standup with a valid past reminder
+    const pastDate = new Date(Date.now() - 60000);
+    await col.insertOne({ status: 'active', nextReminderAt: pastDate, label: 'due' });
+    // Simulate a standup with a future reminder
+    const futureDate = new Date(Date.now() + 60000);
+    await col.insertOne({ status: 'active', nextReminderAt: futureDate, label: 'not_yet' });
+
+    const now = new Date();
+
+    // $lte should NOT match null
+    const lteResults = await col.find({ nextReminderAt: { $lte: now } }).toArray();
+    assert.strictEqual(lteResults.length, 1, '$lte should not match null values');
+    assert.strictEqual(lteResults[0].label, 'due');
+
+    // $lt should NOT match null
+    const ltResults = await col.find({ nextReminderAt: { $lt: now } }).toArray();
+    assert.strictEqual(ltResults.length, 1, '$lt should not match null values');
+
+    // $gt should NOT match null
+    const gtResults = await col.find({ nextReminderAt: { $gt: now } }).toArray();
+    assert.strictEqual(gtResults.length, 1, '$gt should not match null values');
+    assert.strictEqual(gtResults[0].label, 'not_yet');
+
+    // $gte should NOT match null
+    const gteResults = await col.find({ nextReminderAt: { $gte: now } }).toArray();
+    assert.strictEqual(gteResults.length, 1, '$gte should not match null values');
+
+    // $ne null should exclude the null document
+    const neNullResults = await col.find({ nextReminderAt: { $ne: null } }).toArray();
+    assert.strictEqual(neNullResults.length, 2, '$ne null should exclude null documents');
+
+    // Combined $ne + $lte (the actual findNeedingReminders query pattern)
+    const reminderQuery = await col.find({
+      status: { $in: ['active', 'collecting'] },
+      nextReminderAt: { $ne: null, $lte: now }
+    }).toArray();
+    assert.strictEqual(reminderQuery.length, 1, 'combined $ne null + $lte should only match due reminders');
+    assert.strictEqual(reminderQuery[0].label, 'due');
+
+    await col.deleteMany({});
+  });
+
+  test('$in operator should work with array document values', async () => {
+    const col = database.getDb().collection('responses');
+    await col.deleteMany({});
+
+    // Simulate standups with expectedParticipants arrays
+    await col.insertOne({
+      status: 'active',
+      expectedParticipants: ['U1', 'U2', 'U3'],
+      label: 'standup1'
+    });
+    await col.insertOne({
+      status: 'active',
+      expectedParticipants: ['U4', 'U5'],
+      label: 'standup2'
+    });
+    await col.insertOne({
+      status: 'completed',
+      expectedParticipants: ['U1'],
+      label: 'standup3'
+    });
+
+    // $in on the status field (scalar) should still work
+    const activeStandups = await col.find({
+      status: { $in: ['active', 'collecting'] }
+    }).toArray();
+    assert.strictEqual(activeStandups.length, 2, 'should find 2 active standups');
+
+    // Direct equality on array field — should match if array contains value
+    const u1Standups = await col.find({
+      expectedParticipants: 'U1'
+    }).toArray();
+    assert.strictEqual(u1Standups.length, 2, 'should find 2 standups containing U1');
+
+    // $in where document field is an array — should match if any element is in opVal
+    const inArrayResults = await col.find({
+      expectedParticipants: { $in: ['U1', 'U4'] }
+    }).toArray();
+    assert.strictEqual(inArrayResults.length, 3, '$in should match documents where any array element is in the query values');
+
+    await col.deleteMany({});
+  });
 });
