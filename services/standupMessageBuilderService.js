@@ -165,7 +165,7 @@ class StandupMessageBuilderService {
     if (responses.length > 0) {
       const responseList = responses
         .slice(0, 10)
-        .map(r => `• ${r.userDisplayName || r.username} ${r.isComplete ? '✅' : '⚠️'}`)
+        .map(r => `• ${r.userDisplayName || r.username} ✅`)
         .join('\n');
         
       blocks.push(

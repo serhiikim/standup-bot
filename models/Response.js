@@ -86,14 +86,7 @@ class Response {
     return responses.map(data => new Response(data));
   }
 
-  static async findIncomplete(standupId) {
-    const cursor = this.getCollection().find({ 
-      standupId: standupId instanceof ObjectId ? standupId : new ObjectId(standupId),
-      isComplete: false 
-    });
-    const responses = await cursor.toArray();
-    return responses.map(data => new Response(data));
-  }
+
 
   static async updateByStandupAndUser(standupId, userId, updateData) {
     updateData.updatedAt = new Date();
@@ -173,10 +166,8 @@ class Response {
   }
 
   checkCompletion() {
-    // Consider complete if all responses have content
-    this.isComplete = this.responses.every(response => 
-      response && response.trim().length > 0
-    );
+    // Any submission counts as complete
+    this.isComplete = true;
   }
 
   markAsEdited() {

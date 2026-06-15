@@ -126,7 +126,7 @@ class Standup {
     const now = new Date();
     const cursor = this.getCollection().find({
       status: { $in: [STANDUP_STATUS.ACTIVE, STANDUP_STATUS.COLLECTING] },
-      'reminders.nextReminderAt': { $lte: now }
+      'reminders.nextReminderAt': { $ne: null, $lte: now }
     });
     const standups = await cursor.toArray();
     return standups.map(data => new Standup(data));

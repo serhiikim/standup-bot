@@ -39,7 +39,7 @@ function isDMChannel(channelId) {
         console.error('Database error fetching response:', error);
         throw new Error('Failed to fetch user response');
       }
-      if (!existingResponse || !existingResponse.isComplete) {
+      if (!existingResponse) {
         pendingStandups.push(standup); // Use plain data, no need to instantiate Standup
       }
     }

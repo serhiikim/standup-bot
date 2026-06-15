@@ -52,7 +52,11 @@ class StandupReminderService {
       const channel = await Channel.findByChannelId(standup.teamId, standup.channelId);
       const timeLeft = standup.responseDeadline - new Date();
       if (channel.config.enableReminders && timeLeft > 0) {
-        const nextReminderTime = new Date(Date.now() + channel.config.reminderInterval);
+        // Use 30-minute interval when less than 1 hour remains, otherwise use default
+        const ONE_HOUR = 60 * 60 * 1000;
+        const THIRTY_MINUTES = 30 * 60 * 1000;
+        const interval = timeLeft <= ONE_HOUR ? THIRTY_MINUTES : channel.config.reminderInterval;
+        const nextReminderTime = new Date(Date.now() + interval);
         if (nextReminderTime < standup.responseDeadline) {
           standup.setNextReminder(nextReminderTime);
         } else {

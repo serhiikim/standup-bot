@@ -58,9 +58,8 @@ function register(app) {
           recentResponses.forEach(response => {
             const date = response.submittedAt.toLocaleDateString();
             const time = response.submittedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const status = response.isComplete ? '✅' : '⚠️';
             const edited = response.isEdited ? ' ✏️' : '';
-            statusText += `• ${date} ${time} ${status}${edited}\n`;
+            statusText += `• ${date} ${time} ✅${edited}\n`;
           });
           statusText += `\n`;
         }
