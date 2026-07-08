@@ -88,6 +88,26 @@ class SlackService {
     }
   }
 
+  async postEphemeral(channelId, userId, text, blocks = null) {
+    try {
+      const messagePayload = {
+        channel: channelId,
+        user: userId,
+        text: text
+      };
+
+      if (blocks) {
+        messagePayload.blocks = blocks;
+      }
+
+      const result = await this.app.client.chat.postEphemeral(messagePayload);
+      return result;
+    } catch (error) {
+      console.error('Error posting ephemeral message:', error);
+      throw error;
+    }
+  }
+
   async updateMessage(channelId, messageTs, text, blocks = null) {
     try {
       const updatePayload = {

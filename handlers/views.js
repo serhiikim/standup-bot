@@ -96,9 +96,9 @@ function register(app) {
         `• Participants: ${formData.participants.length > 0 ? `${formData.participants.length} specific users` : 'All channel members'}`
       );
   
-      // Post confirmation in channel (only if bot is in channel)
+      // Post confirmation in channel, visible only to the user who made the change
       try {
-        await slackService.postMessage(channelId,
+        await slackService.postEphemeral(channelId, userId,
           `✅ Standup configuration ${formData.isUpdate ? 'updated' : 'created'} by ${slackService.formatUserMention(userId)}!\n\n` +
           `🕒 Standups will run at *${formatTimeAmPm(formData.time)}* (${formData.timezone}) on *${formData.daysText}*\n` +
           `⏰ Deadline: *${formatTimeAmPm(formData.deadlineTime)}* (${formData.timezone})\n` +
