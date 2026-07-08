@@ -130,16 +130,21 @@ class StandupCompletionService {
         avgResponseTime: responseStats.avgResponseTime
       });
       
-      const completionMessage = this.messageBuilder.createCompletionMessage(standup, responses, responseStats, aiAnalysis);
-      await this.slackService.postMessage(
-        standup.channelId,
-        completionMessage.text,
-        completionMessage.blocks,
-        standup.threadTs
-      );
-      
       standup.updateStatus(STANDUP_STATUS.COMPLETED);
       await standup.save();
+
+      const completionMessage = this.messageBuilder.createCompletionMessage(standup, responses, responseStats, aiAnalysis);
+      try {
+        await this.slackService.postMessage(
+          standup.channelId,
+          completionMessage.text,
+          completionMessage.blocks,
+          standup.threadTs
+        );
+      } catch (error) {
+        console.error(`Error posting completion message for standup ${standupId}:`, error);
+      }
+
       const channel = await Channel.findByChannelId(standup.teamId, standup.channelId);
       channel.updateStats({
         avgResponseRate: ((channel.stats.avgResponseRate * (channel.stats.totalStandups - 1)) + standup.getResponseRate()) / channel.stats.totalStandups

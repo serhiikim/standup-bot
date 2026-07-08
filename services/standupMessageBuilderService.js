@@ -194,9 +194,13 @@ class StandupMessageBuilderService {
       blocks.push({ type: 'divider' });
       
       if (aiAnalysis.summary) {
+        const MAX_SUMMARY_LENGTH = 2800;
+        const summary = aiAnalysis.summary.length > MAX_SUMMARY_LENGTH
+          ? `${aiAnalysis.summary.slice(0, MAX_SUMMARY_LENGTH)}... (truncated)`
+          : aiAnalysis.summary;
         blocks.push({
           type: 'section',
-          text: { type: 'mrkdwn', text: `🤖 *AI Summary:*\n${aiAnalysis.summary}` }
+          text: { type: 'mrkdwn', text: `🤖 *AI Summary:*\n${summary}` }
         });
       }
     } else if (responses.length > 0) {
