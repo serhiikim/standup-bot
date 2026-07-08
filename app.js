@@ -1,4 +1,5 @@
 require('dotenv').config();
+require('./utils/logger');
 const { App } = require('@slack/bolt');
 const database = require('./config/database');
 const scheduler = require('./jobs/scheduler');
