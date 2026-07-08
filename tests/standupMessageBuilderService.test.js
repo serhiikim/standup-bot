@@ -60,3 +60,28 @@ describe('StandupMessageBuilderService.truncateSummary', () => {
     assert.ok(result.endsWith('\n... (truncated)'));
   });
 });
+
+describe('StandupMessageBuilderService.createSummaryDM', () => {
+  const service = new StandupMessageBuilderService(null);
+
+  test('includes the channel name and AI summary text', () => {
+    const aiAnalysis = { summary: 'Alice shipped the login page.' };
+
+    const result = service.createSummaryDM({}, 'engineering', aiAnalysis);
+
+    assert.ok(result.text.includes('#engineering'));
+    assert.ok(result.text.includes('Alice shipped the login page.'));
+    assert.strictEqual(result.blocks.length, 1);
+    assert.strictEqual(result.blocks[0].text.text, result.text);
+  });
+
+  test('truncates long summaries the same way as the channel message', () => {
+    const longSummary = 'x'.repeat(3000);
+    const aiAnalysis = { summary: longSummary };
+
+    const result = service.createSummaryDM({}, 'engineering', aiAnalysis);
+
+    assert.ok(result.text.includes('... (truncated)'));
+    assert.ok(!result.text.includes(longSummary));
+  });
+});
