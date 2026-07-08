@@ -212,6 +212,20 @@ class StandupMessageBuilderService {
     return { text, blocks };
   }
 
+  createSummaryDM(standup, channelName, aiAnalysis) {
+    const summary = this.truncateSummary(aiAnalysis.summary);
+    const text = `🤖 *AI Summary for #${channelName}*\n\n${summary}`;
+    return {
+      text,
+      blocks: [
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text }
+        }
+      ]
+    };
+  }
+
   truncateSummary(summary, maxLength = 2800) {
     if (summary.length <= maxLength) {
       return summary;

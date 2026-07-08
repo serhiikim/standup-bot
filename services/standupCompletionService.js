@@ -133,6 +133,8 @@ class StandupCompletionService {
       standup.updateStatus(STANDUP_STATUS.COMPLETED);
       await standup.save();
 
+      const channel = await Channel.findByChannelId(standup.teamId, standup.channelId);
+
       const completionMessage = this.messageBuilder.createCompletionMessage(standup, responses, responseStats, aiAnalysis);
       try {
         await this.slackService.postMessage(
@@ -145,7 +147,15 @@ class StandupCompletionService {
         console.error(`Error posting completion message for standup ${standupId}:`, error);
       }
 
-      const channel = await Channel.findByChannelId(standup.teamId, standup.channelId);
+      if (aiAnalysis?.summary && channel?.configuredBy) {
+        try {
+          const summaryDM = this.messageBuilder.createSummaryDM(standup, channel.channelName, aiAnalysis);
+          await this.slackService.sendDM(channel.configuredBy, summaryDM.text, summaryDM.blocks);
+        } catch (error) {
+          console.error(`Error sending summary DM for standup ${standupId}:`, error);
+        }
+      }
+
       channel.updateStats({
         avgResponseRate: ((channel.stats.avgResponseRate * (channel.stats.totalStandups - 1)) + standup.getResponseRate()) / channel.stats.totalStandups
       });
