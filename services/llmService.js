@@ -132,7 +132,8 @@ Instructions for output formatting:
 2. Use Slack Markdown (mrkdwn) like *bold* headers, list items, and emojis for layout structure. Do NOT use standard Markdown headers like '#' or '##'.
 3. Keep the summary concise, readable, and focused on key achievements, active work, and active blockers.
 4. Preserve and use team member Slack mentions (like <@U123456>) in your summary when attributing work or blockers.
-5. Return ONLY the final formatted summary text.
+5. Do NOT include URLs or hyperlinks (e.g. task/ticket links) in the summary, even if they appear in the responses. Refer to tasks, tickets, or projects by name only.
+6. Return ONLY the final formatted summary text.
 `;
   }
 
