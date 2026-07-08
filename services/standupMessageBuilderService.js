@@ -194,10 +194,7 @@ class StandupMessageBuilderService {
       blocks.push({ type: 'divider' });
       
       if (aiAnalysis.summary) {
-        const MAX_SUMMARY_LENGTH = 2800;
-        const summary = aiAnalysis.summary.length > MAX_SUMMARY_LENGTH
-          ? `${aiAnalysis.summary.slice(0, MAX_SUMMARY_LENGTH)}... (truncated)`
-          : aiAnalysis.summary;
+        const summary = this.truncateSummary(aiAnalysis.summary);
         blocks.push({
           type: 'section',
           text: { type: 'mrkdwn', text: `🤖 *AI Summary:*\n${summary}` }
@@ -213,6 +210,19 @@ class StandupMessageBuilderService {
     }
 
     return { text, blocks };
+  }
+
+  truncateSummary(summary, maxLength = 2800) {
+    if (summary.length <= maxLength) {
+      return summary;
+    }
+    // Cut back to the end of the last full line so we don't sever a
+    // markdown link (e.g. `[text](url)`) mid-way through.
+    let cutoff = summary.lastIndexOf('\n', maxLength);
+    if (cutoff === -1 || cutoff < maxLength * 0.5) {
+      cutoff = maxLength;
+    }
+    return `${summary.slice(0, cutoff)}\n... (truncated)`;
   }
 
   createOOONotificationMessage(statusFilter, channel) {
