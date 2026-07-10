@@ -21,6 +21,7 @@ class Response {
     this.isComplete = data.isComplete || false; // Has answered all questions
     this.isEdited = data.isEdited || false; // Was the response edited
     this.editCount = data.editCount || 0; // Number of times edited
+    this.isLate = data.isLate || false; // Submitted after the standup's response deadline
     
     // Timing
     this.submittedAt = data.submittedAt ? new Date(data.submittedAt) : new Date();
@@ -217,6 +218,7 @@ class Response {
       isComplete: this.isComplete,
       isEdited: this.isEdited,
       editCount: this.editCount,
+      isLate: this.isLate,
       submittedAt: this.submittedAt,
       lastEditedAt: this.lastEditedAt,
       responseTime: this.responseTime,

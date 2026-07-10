@@ -219,6 +219,38 @@ describe('Models Database CRUD Verification', () => {
     assert.strictEqual(result.errors.length, 0, 'should have no errors');
   });
 
+  test('Response isLate defaults to false and persists when set', async () => {
+    const standup = await Standup.create({
+      teamId: 'T_LATE',
+      channelId: 'C_LATE',
+      questions: ['Q1'],
+      expectedParticipants: ['U1'],
+      responseDeadline: new Date(Date.now() - 1000 * 60) // already past
+    });
+
+    const onTimeResponse = new Response({
+      standupId: standup._id, teamId: 'T_LATE', channelId: 'C_LATE',
+      userId: 'U1', username: 'alice'
+    });
+    assert.strictEqual(onTimeResponse.isLate, false, 'isLate should default to false');
+
+    const lateResponse = await Response.create({
+      standupId: standup._id,
+      teamId: 'T_LATE',
+      channelId: 'C_LATE',
+      userId: 'U2',
+      username: 'bob',
+      responses: ['submitted after the deadline'],
+      isLate: true
+    });
+
+    const found = await Response.findById(lateResponse._id);
+    assert.strictEqual(found.isLate, true, 'isLate should persist as true');
+
+    await standup.delete();
+    await lateResponse.delete();
+  });
+
   test('parseRawMessage stores raw message without splitting', () => {
     const questions = ['Yesterday?', 'Today?', 'Blockers?'];
 

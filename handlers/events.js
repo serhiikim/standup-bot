@@ -3,6 +3,7 @@ const Channel = require('../models/Channel');
 const Standup = require('../models/Standup');
 const Response = require('../models/Response');
 const StandupService = require('../services/standupService');
+const { STANDUP_STATUS } = require('../utils/constants');
 
 let slackService;
 let standupService;
@@ -40,10 +41,11 @@ function register(app) {
       const team = event.team || messageData.team;
       const channel = event.channel;
 
-      // Check if this is a response to an active standup
+      // Check if this is a response to an active (or just-completed) standup
       const standup = await Standup.findByThreadTs(team, thread_ts);
-      if (!standup || !standup.isActive()) {
-        return; // Not an active standup thread
+      const isCompletedStandup = standup?.status === STANDUP_STATUS.COMPLETED;
+      if (!standup || (!standup.isActive() && !isCompletedStandup)) {
+        return; // Not a standup thread we still accept responses for
       }
 
       // Check if user is expected to participate
@@ -61,15 +63,21 @@ function register(app) {
       try {
       // Get user info for better display
       const userInfo = await slackService.getUserInfo(user);
-      
+
+      // A response is "late" if the standup already completed (summary sent) or
+      // the deadline has passed but the completion job hasn't caught up yet.
+      const isLate = isCompletedStandup ||
+        (standup.responseDeadline && new Date() > standup.responseDeadline);
+
       // Handle response (create or update)
       const existingResponse = await Response.findByStandupAndUser(standup._id, user);
       let responseAction = '';
-      
+
       if (existingResponse) {
         // Update existing response
         existingResponse.parseRawMessage(text, standup.questions);
         existingResponse.messageTs = ts;
+        existingResponse.isLate = isLate;
         existingResponse.markAsEdited();
         await existingResponse.save();
         responseAction = 'updated';
@@ -94,7 +102,8 @@ function register(app) {
           userDisplayName: userInfo.profile?.display_name || userInfo.real_name || userInfo.name,
           messageTs: ts,
           threadTs: thread_ts,
-          submittedAt: new Date()
+          submittedAt: new Date(),
+          isLate
         };
 
         const response = await Response.create(responseData);
@@ -102,9 +111,12 @@ function register(app) {
         response.calculateResponseTime(standup.startedAt);
         await response.save();
 
-        // Update standup participant list
-        standup.addParticipant(user);
-        await standup.save();
+        // Don't touch participant/stats for a standup that already completed —
+        // its summary and stats were already computed and posted.
+        if (!isCompletedStandup) {
+          standup.addParticipant(user);
+          await standup.save();
+        }
         responseAction = 'received';
 
         // React to show response received
@@ -118,16 +130,19 @@ function register(app) {
         return;
       }
 
-      console.log(`Standup response ${responseAction} from ${userInfo.name}`);
+      console.log(`Standup response ${responseAction} from ${userInfo.name}${isLate ? ' (late)' : ''}`);
 
-      // 🎯 SINGLE RESPONSIBILITY: Delegate all business logic to StandupService
+      // Skip completion checks entirely for a standup that's already completed —
+      // nothing left to auto-complete or re-summarize.
+      if (!isCompletedStandup) {
+        // 🎯 SINGLE RESPONSIBILITY: Delegate all business logic to StandupService
+        const completionResult = await standupService.checkStandupCompletion(standup._id, 'response');
 
-      const completionResult = await standupService.checkStandupCompletion(standup._id, 'response');
-      
-      if (completionResult.success) {
-        console.log(`📊 Standup completion check result:`, completionResult);
-      } else {
-        console.error(`❌ Standup completion check failed:`, completionResult.error);
+        if (completionResult.success) {
+          console.log(`📊 Standup completion check result:`, completionResult);
+        } else {
+          console.error(`❌ Standup completion check failed:`, completionResult.error);
+        }
       }
 
       } finally {
