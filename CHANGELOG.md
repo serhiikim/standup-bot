@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/serhiikim/standup-bot/compare/v1.0.2...v1.1.0) (2026-07-10)
+
+
+### Features
+
+* persist late standup replies instead of dropping them ([00cfc52](https://github.com/serhiikim/standup-bot/commit/00cfc52072d90525b1d4e04488154e13cf48a221))
+
 ## [1.0.2](https://github.com/serhiikim/standup-bot/compare/v1.0.1...v1.0.2) (2026-07-10)
 
 
