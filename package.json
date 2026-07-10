@@ -17,7 +17,7 @@
         "docker:health": "./scripts/health.sh",
         "docker:clean": "./scripts/clean.sh",
         "docker:update": "./scripts/update.sh",
-        "prepare": "husky"
+        "prepare": "husky || true"
     },
     "keywords": [
         "slack",
