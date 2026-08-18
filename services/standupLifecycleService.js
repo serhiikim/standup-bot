@@ -63,6 +63,7 @@ class StandupLifecycleService {
         teamId,
         channelId,
         questions: [...channel.config.questions],
+        freeformPrompt: !!channel.config.freeformPrompt,
         expectedParticipants: statusFilter.participants,
         scheduledDate: new Date(),
         responseDeadline,

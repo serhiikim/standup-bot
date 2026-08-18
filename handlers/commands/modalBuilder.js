@@ -8,6 +8,16 @@ const {
   DEFAULT_DEADLINE_TIME
 } = require('../../utils/constants');
 
+// Slack requires initial_options entries to match an entry in options exactly,
+// so both references share this one object.
+const FREEFORM_TOGGLE_OPTION = {
+  text: {
+    type: 'plain_text',
+    text: 'Single free-form prompt'
+  },
+  value: 'freeform'
+};
+
 function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
   const isUpdate = !!existingChannel;
   const config = existingChannel?.config || {};
@@ -103,6 +113,27 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
         hint: {
           type: 'plain_text',
           text: 'Enter each question on a separate line. Maximum 10 questions.'
+        }
+      },
+
+      // Free-form prompt toggle
+      {
+        type: 'input',
+        block_id: BLOCK_IDS.FREEFORM_TOGGLE,
+        optional: true,
+        label: {
+          type: 'plain_text',
+          text: 'Prompt Style'
+        },
+        element: {
+          type: 'checkboxes',
+          action_id: BLOCK_IDS.FREEFORM_TOGGLE,
+          options: [FREEFORM_TOGGLE_OPTION],
+          ...(config.freeformPrompt ? { initial_options: [FREEFORM_TOGGLE_OPTION] } : {})
+        },
+        hint: {
+          type: 'plain_text',
+          text: 'Use this for a single open-ended ask (e.g. "share a screenshot of what you are working on"). The text above is kept as-is, line breaks and all, instead of being split into numbered questions.'
         }
       },
 

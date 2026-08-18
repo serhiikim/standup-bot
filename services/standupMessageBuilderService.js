@@ -11,7 +11,11 @@ class StandupMessageBuilderService {
   createStandupMessage(standup, participants, channel, statusFilter = null) {
     const participantMentions = participants.map(p => this.slackService.formatUserMention(p.id)).join(' ');
     
-    let text = `🚀 **Daily Standup Started!**\n\nPlease respond to the questions below in this thread before the deadline.`;
+    const isFreeform = !!standup.freeformPrompt;
+
+    let text = isFreeform
+      ? `🚀 **Daily Standup Started!**\n\nPlease respond to the prompt below in this thread before the deadline.`
+      : `🚀 **Daily Standup Started!**\n\nPlease respond to the questions below in this thread before the deadline.`;
     
     if (statusFilter && statusFilter.oooCount > 0) {
       text += `\n\n📴 ${statusFilter.oooCount} team member(s) are currently out of office.`;
@@ -68,20 +72,34 @@ class StandupMessageBuilderService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: '*Please answer these questions in a reply to this thread:*'
+          text: isFreeform
+            ? '*Please reply to this thread:*'
+            : '*Please answer these questions in a reply to this thread:*'
         }
       }
     );
 
-    standup.questions.forEach((question, index) => {
+    if (isFreeform) {
+      // A single free-form ask keeps its own multi-line layout (bullets, blank
+      // lines) — numbering it would break the text the author wrote.
       blocks.push({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*${index + 1}.* ${question}`
+          text: standup.questions.join('\n\n')
         }
       });
-    });
+    } else {
+      standup.questions.forEach((question, index) => {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${index + 1}.* ${question}`
+          }
+        });
+      });
+    }
 
     blocks.push(
       { type: 'divider' },
@@ -90,7 +108,9 @@ class StandupMessageBuilderService {
         elements: [
           {
             type: 'mrkdwn',
-            text: '💡 *Tip:* Reply to this message with your answers. You can edit your response anytime before the deadline.'
+            text: isFreeform
+              ? '💡 *Tip:* Reply to this message in the thread. You can edit your response anytime before the deadline.'
+              : '💡 *Tip:* Reply to this message with your answers. You can edit your response anytime before the deadline.'
           }
         ]
       }

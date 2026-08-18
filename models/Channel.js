@@ -21,6 +21,7 @@ class Channel {
     // Standup configuration
     this.config = data.config || {
       questions: [...DEFAULT_STANDUP_QUESTIONS],
+      freeformPrompt: false,
       time: DEFAULT_STANDUP_TIME,
       deadlineTime: DEFAULT_DEADLINE_TIME,
       days: [...DEFAULT_STANDUP_DAYS],
