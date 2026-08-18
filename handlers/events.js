@@ -50,7 +50,7 @@ function register(app) {
   slackService = new SlackService(app);
   standupService = new StandupService(app);
   // Handle messages in threads (for standup responses)
-  app.event('message', async ({ event, client }) => {
+  app.event('message', async ({ event, client, context, body }) => {
     try {
       // Allow message_changed subtype for native Slack edits
       const isNativeEdit = event.subtype === 'message_changed';
@@ -73,7 +73,10 @@ function register(app) {
       }
 
       const { user, text, ts, thread_ts } = messageData;
-      const team = event.team || messageData.team;
+      // Slack omits `team` on messages that carry an uploaded file, so reading
+      // it only from the payload resolved to undefined and every lookup below
+      // missed. The Bolt envelope always carries the workspace id.
+      const team = event.team || messageData.team || context?.teamId || body?.team_id;
       const channel = event.channel;
 
       // Uploads arrive with the typed text and the files in one message; a
@@ -87,11 +90,20 @@ function register(app) {
       const standup = await Standup.findByThreadTs(team, thread_ts);
       const isCompletedStandup = standup?.status === STANDUP_STATUS.COMPLETED;
       if (!standup || (!standup.isActive() && !isCompletedStandup)) {
+        // Logged because a reply silently vanishing here is indistinguishable
+        // from a reply in an unrelated thread, which is how a lost-response bug
+        // stayed invisible for weeks.
+        console.debug(
+          `↩️ Ignoring thread reply: no active standup (team=${team}, thread=${thread_ts}, user=${user}, status=${standup?.status || 'none'})`
+        );
         return; // Not a standup thread we still accept responses for
       }
 
       // Check if user is expected to participate
       if (!standup.expectedParticipants.includes(user)) {
+        console.debug(
+          `↩️ Ignoring thread reply: user not an expected participant (team=${team}, thread=${thread_ts}, user=${user})`
+        );
         return;
       }
 

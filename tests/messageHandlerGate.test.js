@@ -10,8 +10,13 @@ let messageHandler;
 let lookups;
 let originalFindByThreadTs;
 
-function fireEvent(event) {
-  return messageHandler({ event, client: { reactions: { add: async () => {} } } });
+function fireEvent(event, envelope = {}) {
+  return messageHandler({
+    event,
+    client: { reactions: { add: async () => {} } },
+    context: envelope.context,
+    body: envelope.body
+  });
 }
 
 describe('message handler: which events reach the standup lookup', () => {
@@ -124,5 +129,63 @@ describe('message handler: which events reach the standup lookup', () => {
       message: { ...threadReply, text: '', files: [{ title: 'v2.png' }] }
     });
     assert.strictEqual(lookups.length, 1);
+  });
+
+
+  describe('message handler: resolving the workspace id', () => {
+    // Slack omits `team` on messages carrying an uploaded file. The lookup then
+    // ran with teamId undefined, matched nothing, and returned without a log —
+    // the reply was in the thread but never in the database.
+    const fileReply = {
+      channel: 'C1',
+      user: 'U1',
+      ts: '1700000001.0002',
+      thread_ts: '1700000000.0001',
+      subtype: 'file_share',
+      text: 'Here is the new dashboard',
+      files: [{ title: 'dashboard.png' }]
+    };
+
+    test('falls back to context.teamId when the payload has no team', async () => {
+      await fireEvent({ ...fileReply }, { context: { teamId: 'T0E6PHK8W' } });
+
+      assert.strictEqual(lookups.length, 1, 'the lookup must still happen');
+      assert.strictEqual(lookups[0].teamId, 'T0E6PHK8W', 'must not look up with undefined');
+    });
+
+    test('falls back to body.team_id when context has no teamId either', async () => {
+      await fireEvent({ ...fileReply }, { body: { team_id: 'T0E6PHK8W' } });
+
+      assert.strictEqual(lookups.length, 1);
+      assert.strictEqual(lookups[0].teamId, 'T0E6PHK8W');
+    });
+
+    test('an explicit team on the event still wins', async () => {
+      await fireEvent(
+        { ...fileReply, team: 'T_FROM_EVENT' },
+        { context: { teamId: 'T_FROM_CONTEXT' } }
+      );
+
+      assert.strictEqual(lookups[0].teamId, 'T_FROM_EVENT');
+    });
+
+    test('a native edit resolves the team from the envelope too', async () => {
+      await fireEvent(
+        { subtype: 'message_changed', channel: 'C1', message: { ...fileReply } },
+        { context: { teamId: 'T0E6PHK8W' } }
+      );
+
+      assert.strictEqual(lookups.length, 1);
+      assert.strictEqual(lookups[0].teamId, 'T0E6PHK8W');
+    });
+
+    test('regression: a file reply with no team anywhere would look up undefined', async () => {
+      // Documents the exact production failure: without an envelope there is
+      // nothing to fall back to, and the lookup is doomed.
+      await fireEvent({ ...fileReply });
+
+      assert.strictEqual(lookups.length, 1);
+      assert.strictEqual(lookups[0].teamId, undefined);
+    });
   });
 });
