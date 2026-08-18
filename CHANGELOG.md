@@ -1,3 +1,15 @@
+# [1.2.0](https://github.com/serhiikim/standup-bot/compare/v1.1.0...v1.2.0) (2026-08-18)
+
+
+### Bug Fixes
+
+* stop dropping file_share and thread_broadcast standup replies ([04c03a1](https://github.com/serhiikim/standup-bot/commit/04c03a1f6088facbefd2fe7d08083977f5dba403))
+
+
+### Features
+
+* support a single free-form standup prompt ([6f559c0](https://github.com/serhiikim/standup-bot/commit/6f559c01fc3db6d19fceb5d8f661be7534da5f58))
+
 # [1.1.0](https://github.com/serhiikim/standup-bot/compare/v1.0.2...v1.1.0) (2026-07-10)
 
 
