@@ -75,7 +75,11 @@ class LLMService {
         return `${userMention}:\n${response.rawMessage}`;
       }).join('\n\n---\n\n');
 
-      const prompt = this.createAnalysisPrompt(standup.questions, responsesText);
+      const prompt = this.createAnalysisPrompt(
+        standup.questions,
+        responsesText,
+        !!standup.freeformPrompt
+      );
 
       const completion = await this.openai.chat.completions.create({
         model: this.model,
@@ -115,7 +119,11 @@ class LLMService {
   /**
    * Create analysis prompt for LLM
    */
-  createAnalysisPrompt(questions, responsesText) {
+  createAnalysisPrompt(questions, responsesText, freeform = false) {
+    if (freeform) {
+      return this.createFreeformAnalysisPrompt(questions, responsesText);
+    }
+
     return `
 Please analyze the following team standup responses and generate a well-structured summary. 
 
@@ -133,6 +141,32 @@ Instructions for output formatting:
 3. Keep the summary concise, readable, and focused on key achievements, active work, and active blockers.
 4. Preserve and use team member Slack mentions (like <@U123456>) in your summary when attributing work or blockers.
 5. Do NOT include URLs or hyperlinks (e.g. task/ticket links) in the summary, even if they appear in the responses. Refer to tasks, tickets, or projects by name only.
+6. Return ONLY the final formatted summary text.
+`;
+  }
+
+  /**
+   * Create analysis prompt for a single free-form ask (show-and-tell, demos,
+   * open questions) rather than the classic yesterday/today/blockers grid.
+   */
+  createFreeformAnalysisPrompt(questions, responsesText) {
+    return `
+Please summarize what the team shared in response to the prompt below.
+
+This standup is a single open-ended ask, not a structured yesterday/today/blockers report. Do not invent sections for achievements, blockers, or next steps unless the responses actually contain them. Organize the digest around what people shared.
+
+STANDUP PROMPT:
+${questions.join('\n\n')}
+
+TEAM RESPONSES:
+${responsesText}
+
+Instructions for output formatting:
+1. Lead with one short sentence describing the overall theme of what was shared, then list each contributor's item.
+2. Use Slack Markdown (mrkdwn) like *bold* headers, list items, and emojis for layout structure. Do NOT use standard Markdown headers like '#' or '##'.
+3. Preserve and use team member Slack mentions (like <@U123456>) when attributing what each person shared.
+4. Keep links exactly as they appear in the responses. Demos, screenshots, designs and prototypes are the substance of this kind of update, so a link is worth keeping rather than stripping.
+5. If someone replied without substance (for example "nothing today"), leave them out rather than padding the summary.
 6. Return ONLY the final formatted summary text.
 `;
   }

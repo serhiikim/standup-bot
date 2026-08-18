@@ -55,6 +55,8 @@ const DEFAULT_STANDUP_QUESTIONS = [
     MAX_QUESTIONS: 10,
     MIN_QUESTIONS: 1,
     MAX_PARTICIPANTS: 100,
+    MAX_QUESTION_LENGTH: 200,
+    MAX_FREEFORM_PROMPT_LENGTH: 2500,
     MIN_RESPONSE_LENGTH: 5,
     MAX_RESPONSE_LENGTH: 2000,
     MAX_CHANNEL_NAME_LENGTH: 21 // Slack limit
@@ -80,6 +82,7 @@ const DEFAULT_STANDUP_QUESTIONS = [
   const BLOCK_IDS = {
     SETUP_MODAL: 'standup_setup_modal',
     QUESTIONS_INPUT: 'questions_input',
+    FREEFORM_TOGGLE: 'freeform_prompt_toggle',
     TIME_SELECT: 'time_select',
     DEADLINE_TIME_SELECT: 'deadline_time_select',
     DAYS_SELECT: 'days_select',

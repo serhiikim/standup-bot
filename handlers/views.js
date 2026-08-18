@@ -92,7 +92,7 @@ function register(app) {
         `• Time: ${formatTimeAmPm(formData.time)} (${formData.timezone})\n` +
         `• Deadline: ${formatTimeAmPm(formData.deadlineTime)} (${formData.timezone})\n` +
         `• Days: ${formData.daysText}\n` +
-        `• Questions: ${formData.questions.length}\n` +
+        `• ${formData.freeformPrompt ? 'Format: single free-form prompt' : `Questions: ${formData.questions.length}`}\n` +
         `• Participants: ${formData.participants.length > 0 ? `${formData.participants.length} specific users` : 'All channel members'}`
       );
   
@@ -102,7 +102,7 @@ function register(app) {
           `✅ Standup configuration ${formData.isUpdate ? 'updated' : 'created'} by ${slackService.formatUserMention(userId)}!\n\n` +
           `🕒 Standups will run at *${formatTimeAmPm(formData.time)}* (${formData.timezone}) on *${formData.daysText}*\n` +
           `⏰ Deadline: *${formatTimeAmPm(formData.deadlineTime)}* (${formData.timezone})\n` +
-          `❓ ${formData.questions.length} questions configured\n` +
+          `❓ ${formData.freeformPrompt ? 'Single free-form prompt configured' : `${formData.questions.length} questions configured`}\n` +
           `👥 ${formData.participants.length > 0 ? `${formData.participants.length} specific participants` : 'All channel members can participate'}`
         );
       } catch (channelError) {
@@ -131,9 +131,19 @@ function validateSetupForm(values) {
   
     // Validate questions
     const questionsValue = values[BLOCK_IDS.QUESTIONS_INPUT]?.[BLOCK_IDS.QUESTIONS_INPUT]?.value;
+    const isFreeform = isFreeformSelected(values);
     if (!questionsValue || questionsValue.trim().length === 0) {
-      errors[BLOCK_IDS.QUESTIONS_INPUT] = 'At least one question is required';
+      errors[BLOCK_IDS.QUESTIONS_INPUT] = isFreeform
+        ? 'A prompt is required'
+        : 'At least one question is required';
       isValid = false;
+    } else if (isFreeform) {
+      // The whole textarea is one ask, so neither the per-line count nor the
+      // per-question length limit applies — only the overall size.
+      if (questionsValue.trim().length > LIMITS.MAX_FREEFORM_PROMPT_LENGTH) {
+        errors[BLOCK_IDS.QUESTIONS_INPUT] = `Prompt must be ${LIMITS.MAX_FREEFORM_PROMPT_LENGTH} characters or less`;
+        isValid = false;
+      }
     } else {
       const questions = questionsValue.split('\n')
         .map(q => q.trim())
@@ -147,9 +157,9 @@ function validateSetupForm(values) {
         isValid = false;
       } else {
         // Check individual question length
-        const longQuestions = questions.filter(q => q.length > 200);
+        const longQuestions = questions.filter(q => q.length > LIMITS.MAX_QUESTION_LENGTH);
         if (longQuestions.length > 0) {
-          errors[BLOCK_IDS.QUESTIONS_INPUT] = 'Questions must be 200 characters or less';
+          errors[BLOCK_IDS.QUESTIONS_INPUT] = `Questions must be ${LIMITS.MAX_QUESTION_LENGTH} characters or less`;
           isValid = false;
         }
       }
@@ -190,9 +200,12 @@ function validateSetupForm(values) {
   function extractFormData(values, userTimezone = 'UTC') {
     // Extract questions
     const questionsValue = values[BLOCK_IDS.QUESTIONS_INPUT][BLOCK_IDS.QUESTIONS_INPUT].value;
-    const questions = questionsValue.split('\n')
-      .map(q => q.trim())
-      .filter(q => q.length > 0);
+    const freeformPrompt = isFreeformSelected(values);
+    const questions = freeformPrompt
+      ? [questionsValue.trim()]
+      : questionsValue.split('\n')
+        .map(q => q.trim())
+        .filter(q => q.length > 0);
   
     // Extract time
     const time = values[BLOCK_IDS.TIME_SELECT][BLOCK_IDS.TIME_SELECT].selected_option.value;
@@ -218,6 +231,7 @@ function validateSetupForm(values) {
   
     return {
       questions,
+      freeformPrompt,
       time,
       deadlineTime,
       days,
@@ -225,6 +239,13 @@ function validateSetupForm(values) {
       timezone,
       participants
     };
+  }
+
+  // The checkbox block is optional, so an unchecked box arrives as an absent
+  // block, an absent action, or an empty selected_options array.
+  function isFreeformSelected(values) {
+    const selected = values[BLOCK_IDS.FREEFORM_TOGGLE]?.[BLOCK_IDS.FREEFORM_TOGGLE]?.selected_options;
+    return Array.isArray(selected) && selected.length > 0;
   }
 
   async function saveChannelConfiguration(teamId, channelId, userId, channelInfo, formData) {
@@ -267,6 +288,7 @@ function validateSetupForm(values) {
       configuredBy: userId,
       config: {
         questions: formData.questions,
+        freeformPrompt: !!formData.freeformPrompt,
         time: formData.time,
         deadlineTime: formData.deadlineTime,
         days: formData.days,
@@ -296,4 +318,6 @@ function validateSetupForm(values) {
     await Team.updateLastActive(teamId);
   }
 
-module.exports = { register };
+// validateSetupForm and extractFormData are exported for unit tests; the app
+// itself only needs register.
+module.exports = { register, validateSetupForm, extractFormData };

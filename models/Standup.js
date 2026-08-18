@@ -12,6 +12,10 @@ class Standup {
     
     // Standup metadata
     this.questions = data.questions || [];
+    // Snapshot of the channel's prompt style at start time. Absent on standups
+    // created before free-form prompts existed, which read as the classic
+    // numbered-questions format.
+    this.freeformPrompt = data.freeformPrompt || false;
     this.expectedParticipants = data.expectedParticipants || []; // Array of user IDs
     this.actualParticipants = data.actualParticipants || []; // Users who responded
     
@@ -274,6 +278,7 @@ class Standup {
       messageTs: this.messageTs,
       threadTs: this.threadTs,
       questions: this.questions,
+      freeformPrompt: this.freeformPrompt,
       expectedParticipants: this.expectedParticipants,
       actualParticipants: this.actualParticipants,
       scheduledDate: this.scheduledDate,

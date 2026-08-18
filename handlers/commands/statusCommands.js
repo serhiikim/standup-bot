@@ -43,7 +43,9 @@ function register(app) {
               } else {
                 statusText += `   ⚠️ Overdue\n`;
               }
-              statusText += `   📝 ${standup.questions.length} questions\n\n`;
+              statusText += standup.freeformPrompt
+                ? `   📝 Free-form prompt\n\n`
+                : `   📝 ${standup.questions.length} questions\n\n`;
             } catch (error) {
               console.warn(`Could not fetch channel info for ${standup.channelId}:`, error.message);
               statusText += `🔄 *Unknown channel*\n   ⏱️ Please check the channel\n\n`;
@@ -146,7 +148,9 @@ function register(app) {
       statusText += `• Time: ${channel.config.time} (${channel.config.timezone})\n`;
       statusText += `• Days: ${channel.config.days.map(day => DAY_OPTIONS.find(d => d.value === day)?.label).join(', ')}\n`;
       statusText += `• Status: ${channel.status} ${channel.isActive ? '✅' : '❌'}\n`;
-      statusText += `• Questions: ${channel.config.questions.length}\n`;
+      statusText += channel.config.freeformPrompt
+        ? `• Format: single free-form prompt\n`
+        : `• Questions: ${channel.config.questions.length}\n`;
       statusText += `• Participants: ${channel.config.participants.length > 0 ? `${channel.config.participants.length} specific users` : 'All channel members'}\n\n`;
 
       if (activeStandups.length > 0) {
