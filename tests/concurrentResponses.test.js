@@ -251,4 +251,68 @@ describe('concurrent standup replies', () => {
       'and the author finally gets a checkmark'
     );
   });
+
+  test('the daily-drops sequence: photo reply, then a text reply 13 minutes later', async () => {
+    // What actually happened: the same person posted twice. The first message
+    // carried screenshots and arrived without `team`, so it was dropped; the
+    // second was plain text, arrived with `team`, and was recorded. Only the
+    // second one existed, and only it got a checkmark.
+    const standup = await seedStandup(['U0LV2NYSU']);
+
+    const client = {
+      reactions: {
+        add: async ({ name, timestamp }) => { reactions.push({ name, timestamp }); }
+      }
+    };
+
+    // 13:14 — caption plus three attachments, no team on the payload.
+    await messageHandler({
+      event: {
+        channel: 'C1',
+        user: 'U0LV2NYSU',
+        ts: '1787058859.000100',
+        thread_ts: '1700000000.0001',
+        subtype: 'file_share',
+        text: 'Here is the new onboarding flow',
+        files: [{ title: 'before.png' }, { title: 'after.png' }, { title: 'demo.mp4' }]
+      },
+      client,
+      context: { teamId: 'T1' }
+    });
+
+    const afterFirst = await Response.findByStandupAndUser(standup._id, 'U0LV2NYSU');
+    assert.ok(afterFirst, 'the photo reply is recorded on its own now');
+    assert.strictEqual(afterFirst.rawMessage, 'Here is the new onboarding flow');
+    assert.strictEqual(afterFirst.isEdited, false);
+    assert.strictEqual(reactions.filter(r => r.name === 'white_check_mark').length, 1,
+      'the photo reply is the one that gets the checkmark');
+
+    // 13:27 — plain text, team present, as Slack sent it.
+    await messageHandler({
+      event: {
+        team: 'T1',
+        channel: 'C1',
+        user: 'U0LV2NYSU',
+        ts: '1787059642.000100',
+        thread_ts: '1700000000.0001',
+        text: 'Adding context: this replaces the old three-step signup'
+      },
+      client,
+      context: { teamId: 'T1' }
+    });
+
+    const afterSecond = await Response.findByStandupAndUser(standup._id, 'U0LV2NYSU');
+    assert.strictEqual(
+      afterSecond.rawMessage,
+      'Adding context: this replaces the old three-step signup',
+      'the follow-up updates the same response, as it always did'
+    );
+    assert.strictEqual(afterSecond.isEdited, true, 'recorded as an edit, not a second response');
+    assert.strictEqual(reactions.filter(r => r.name === 'pencil2').length, 1,
+      'the follow-up gets a pencil, not a second checkmark');
+
+    const reloaded = await Standup.findById(standup._id.toString());
+    assert.deepStrictEqual(reloaded.actualParticipants, ['U0LV2NYSU'], 'counted once');
+    assert.strictEqual(reloaded.stats.totalResponded, 1);
+  });
 });
