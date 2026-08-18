@@ -62,6 +62,20 @@ function describeAttachments(files) {
     : `[shared ${label}]`;
 }
 
+// Reactions are cosmetic, but an unhandled failure here (a missing
+// reactions:write scope, a deleted message, already_reacted) used to abort the
+// rest of the handler — including the completion check that posts the summary.
+async function addReaction(client, channel, timestamp, name) {
+  try {
+    await client.reactions.add({ channel, timestamp, name });
+  } catch (error) {
+    const reason = error?.data?.error || error?.message;
+    if (reason !== 'already_reacted') {
+      console.warn(`⚠️ Could not add :${name}: to ${channel}/${timestamp}: ${reason}`);
+    }
+  }
+}
+
 // The text to record for a message, falling back to an attachment description.
 // Returns an empty string when there is nothing worth recording.
 function resolveResponseText(text, files) {
@@ -154,11 +168,7 @@ function register(app) {
 
           // React to show update received (skip for native edits — the original ✅ is already there)
           if (!isNativeEdit) {
-            await client.reactions.add({
-              channel: channel,
-              timestamp: ts,
-              name: 'pencil2' // Edit emoji
-            });
+            await addReaction(client, channel, ts, 'pencil2');
           }
 
         } else if (!isNativeEdit) {
@@ -194,11 +204,7 @@ function register(app) {
           responseAction = 'received';
 
           // React to show response received
-          await client.reactions.add({
-            channel: channel,
-            timestamp: ts,
-            name: 'white_check_mark'
-          });
+          await addReaction(client, channel, ts, 'white_check_mark');
         } else {
           // Native edit on a message we don't have a response for — ignore
           return;
@@ -338,4 +344,4 @@ For more help, visit our documentation!`
 
 // The subtype gate and text resolution are exported for unit tests; the app
 // itself only needs register.
-module.exports = { register, shouldProcessSubtype, describeAttachments, resolveResponseText, withStandupLock, ALLOWED_SUBTYPES };
+module.exports = { register, shouldProcessSubtype, describeAttachments, resolveResponseText, withStandupLock, addReaction, ALLOWED_SUBTYPES };

@@ -170,4 +170,42 @@ describe('concurrent standup replies', () => {
     const a = await Response.findByStandupAndUser(other._id, 'U9');
     assert.ok(a, 'the other standup got its response too');
   });
+
+  test('a failing reaction does not abort the rest of the handler', async () => {
+    // reactions.add used to run unguarded, so a missing reactions:write scope
+    // threw past the response handling and skipped the completion check —
+    // the standup would sit open with replies piling up.
+    const standup = await seedStandup(['U1']);
+    let completionRan = false;
+    const originalCheck = StandupService.prototype.checkStandupCompletion;
+    StandupService.prototype.checkStandupCompletion = async () => {
+      completionRan = true;
+      return { success: true };
+    };
+
+    try {
+      await messageHandler({
+        event: reply('U1', '1700000001.0007', 'my update'),
+        client: {
+          reactions: {
+            add: async () => {
+              const err = new Error('missing_scope');
+              err.data = { error: 'missing_scope' };
+              throw err;
+            }
+          }
+        },
+        context: { teamId: 'T1' }
+      });
+    } finally {
+      StandupService.prototype.checkStandupCompletion = originalCheck;
+    }
+
+    const stored = await Response.findByStandupAndUser(standup._id, 'U1');
+    assert.ok(stored, 'the response is still recorded');
+    assert.strictEqual(completionRan, true, 'the completion check still runs');
+
+    const reloaded = await Standup.findById(standup._id.toString());
+    assert.deepStrictEqual(reloaded.actualParticipants, ['U1']);
+  });
 });
