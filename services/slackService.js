@@ -30,6 +30,32 @@ class SlackService {
     }
   }
 
+  // Reads a full thread, following the cursor. conversations.replies pages at
+  // 100 messages, so a busy standup thread is truncated without this.
+  async getThreadReplies(channelId, threadTs) {
+    const messages = [];
+    let cursor;
+
+    try {
+      do {
+        const result = await this.app.client.conversations.replies({
+          channel: channelId,
+          ts: threadTs,
+          limit: 200,
+          ...(cursor ? { cursor } : {})
+        });
+
+        messages.push(...(result.messages || []));
+        cursor = result.has_more ? result.response_metadata?.next_cursor : undefined;
+      } while (cursor);
+
+      return messages;
+    } catch (error) {
+      console.error('Error getting thread replies:', error);
+      throw error;
+    }
+  }
+
   async getUserInfo(userId) {
     try {
       const result = await this.app.client.users.info({

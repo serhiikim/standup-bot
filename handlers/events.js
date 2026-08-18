@@ -8,8 +8,31 @@ const { STANDUP_STATUS } = require('../utils/constants');
 let slackService;
 let standupService;
 
-// In-memory lock to prevent concurrent processing of messages from the same user
-const processingLocks = new Set();
+// Serialises work per standup. The previous lock was keyed per user AND per
+// standup and dropped the message when held, which caused two problems: two
+// people replying at once each held their own key and raced, and a second
+// message from the same person was discarded outright. Queueing on one key per
+// standup fixes both — nothing is dropped, it just waits its turn.
+const standupLocks = new Map();
+
+function withStandupLock(standupId, fn) {
+  const key = String(standupId);
+  const previous = standupLocks.get(key) || Promise.resolve();
+
+  const run = previous.then(fn);
+  // The stored link must never reject, or the next waiter inherits the failure.
+  const link = run.catch(() => {});
+  standupLocks.set(key, link);
+
+  link.then(() => {
+    // Only the last waiter clears the entry, so the map does not grow forever.
+    if (standupLocks.get(key) === link) {
+      standupLocks.delete(key);
+    }
+  });
+
+  return run;
+}
 
 // Message subtypes that still carry a genuine standup reply:
 //  - file_share: a reply with an uploaded screenshot/video. The typed text and
@@ -39,6 +62,20 @@ function describeAttachments(files) {
     : `[shared ${label}]`;
 }
 
+// Reactions are cosmetic, but an unhandled failure here (a missing
+// reactions:write scope, a deleted message, already_reacted) used to abort the
+// rest of the handler — including the completion check that posts the summary.
+async function addReaction(client, channel, timestamp, name) {
+  try {
+    await client.reactions.add({ channel, timestamp, name });
+  } catch (error) {
+    const reason = error?.data?.error || error?.message;
+    if (reason !== 'already_reacted') {
+      console.warn(`⚠️ Could not add :${name}: to ${channel}/${timestamp}: ${reason}`);
+    }
+  }
+}
+
 // The text to record for a message, falling back to an attachment description.
 // Returns an empty string when there is nothing worth recording.
 function resolveResponseText(text, files) {
@@ -50,7 +87,7 @@ function register(app) {
   slackService = new SlackService(app);
   standupService = new StandupService(app);
   // Handle messages in threads (for standup responses)
-  app.event('message', async ({ event, client }) => {
+  app.event('message', async ({ event, client, context, body }) => {
     try {
       // Allow message_changed subtype for native Slack edits
       const isNativeEdit = event.subtype === 'message_changed';
@@ -73,7 +110,10 @@ function register(app) {
       }
 
       const { user, text, ts, thread_ts } = messageData;
-      const team = event.team || messageData.team;
+      // Slack omits `team` on messages that carry an uploaded file, so reading
+      // it only from the payload resolved to undefined and every lookup below
+      // missed. The Bolt envelope always carries the workspace id.
+      const team = event.team || messageData.team || context?.teamId || body?.team_id;
       const channel = event.channel;
 
       // Uploads arrive with the typed text and the files in one message; a
@@ -87,109 +127,105 @@ function register(app) {
       const standup = await Standup.findByThreadTs(team, thread_ts);
       const isCompletedStandup = standup?.status === STANDUP_STATUS.COMPLETED;
       if (!standup || (!standup.isActive() && !isCompletedStandup)) {
+        // Logged because a reply silently vanishing here is indistinguishable
+        // from a reply in an unrelated thread, which is how a lost-response bug
+        // stayed invisible for weeks.
+        console.debug(
+          `↩️ Ignoring thread reply: no active standup (team=${team}, thread=${thread_ts}, user=${user}, status=${standup?.status || 'none'})`
+        );
         return; // Not a standup thread we still accept responses for
       }
 
       // Check if user is expected to participate
       if (!standup.expectedParticipants.includes(user)) {
+        console.debug(
+          `↩️ Ignoring thread reply: user not an expected participant (team=${team}, thread=${thread_ts}, user=${user})`
+        );
         return;
       }
 
-      // Prevent concurrent processing for the same user+standup
-      const lockKey = `${standup._id}:${user}`;
-      if (processingLocks.has(lockKey)) {
-        return;
-      }
-      processingLocks.add(lockKey);
+      await withStandupLock(standup._id, async () => {
+        // Get user info for better display
+        const userInfo = await slackService.getUserInfo(user);
 
-      try {
-      // Get user info for better display
-      const userInfo = await slackService.getUserInfo(user);
+        // A response is "late" if the standup already completed (summary sent) or
+        // the deadline has passed but the completion job hasn't caught up yet.
+        const isLate = isCompletedStandup ||
+          (standup.responseDeadline && new Date() > standup.responseDeadline);
 
-      // A response is "late" if the standup already completed (summary sent) or
-      // the deadline has passed but the completion job hasn't caught up yet.
-      const isLate = isCompletedStandup ||
-        (standup.responseDeadline && new Date() > standup.responseDeadline);
+        // Handle response (create or update)
+        const existingResponse = await Response.findByStandupAndUser(standup._id, user);
+        let responseAction = '';
 
-      // Handle response (create or update)
-      const existingResponse = await Response.findByStandupAndUser(standup._id, user);
-      let responseAction = '';
+        if (existingResponse) {
+          // Update existing response
+          existingResponse.parseRawMessage(responseText, standup.questions);
+          existingResponse.messageTs = ts;
+          existingResponse.isLate = isLate;
+          existingResponse.markAsEdited();
+          await existingResponse.save();
+          responseAction = 'updated';
 
-      if (existingResponse) {
-        // Update existing response
-        existingResponse.parseRawMessage(responseText, standup.questions);
-        existingResponse.messageTs = ts;
-        existingResponse.isLate = isLate;
-        existingResponse.markAsEdited();
-        await existingResponse.save();
-        responseAction = 'updated';
+          // React to show update received (skip for native edits — the original ✅ is already there)
+          if (!isNativeEdit) {
+            await addReaction(client, channel, ts, 'pencil2');
+          }
 
-        // React to show update received (skip for native edits — the original ✅ is already there)
-        if (!isNativeEdit) {
-          await client.reactions.add({
-            channel: channel,
-            timestamp: ts,
-            name: 'pencil2' // Edit emoji
-          });
-        }
+        } else if (!isNativeEdit) {
+          // Create new response (only for new messages, not native edits)
+          const responseData = {
+            standupId: standup._id,
+            teamId: team,
+            channelId: channel,
+            userId: user,
+            username: userInfo.name,
+            userDisplayName: userInfo.profile?.display_name || userInfo.real_name || userInfo.name,
+            messageTs: ts,
+            threadTs: thread_ts,
+            submittedAt: new Date(),
+            isLate
+          };
 
-      } else if (!isNativeEdit) {
-        // Create new response (only for new messages, not native edits)
-        const responseData = {
-          standupId: standup._id,
-          teamId: team,
-          channelId: channel,
-          userId: user,
-          username: userInfo.name,
-          userDisplayName: userInfo.profile?.display_name || userInfo.real_name || userInfo.name,
-          messageTs: ts,
-          threadTs: thread_ts,
-          submittedAt: new Date(),
-          isLate
-        };
+          const response = await Response.create(responseData);
+          response.parseRawMessage(responseText, standup.questions);
+          response.calculateResponseTime(standup.startedAt);
+          await response.save();
 
-        const response = await Response.create(responseData);
-        response.parseRawMessage(responseText, standup.questions);
-        response.calculateResponseTime(standup.startedAt);
-        await response.save();
+          // Don't touch participant/stats for a standup that already completed —
+          // its summary and stats were already computed and posted.
+          if (!isCompletedStandup) {
+            // Re-read inside the lock. The copy above was fetched before the lock
+            // was held, and save() rewrites the whole document, so mutating a
+            // stale copy erases participants added in the meantime.
+            const current = await Standup.findById(standup._id) || standup;
+            current.addParticipant(user);
+            await current.save();
+          }
+          responseAction = 'received';
 
-        // Don't touch participant/stats for a standup that already completed —
-        // its summary and stats were already computed and posted.
-        if (!isCompletedStandup) {
-          standup.addParticipant(user);
-          await standup.save();
-        }
-        responseAction = 'received';
-
-        // React to show response received
-        await client.reactions.add({
-          channel: channel,
-          timestamp: ts,
-          name: 'white_check_mark'
-        });
-      } else {
-        // Native edit on a message we don't have a response for — ignore
-        return;
-      }
-
-      console.log(`Standup response ${responseAction} from ${userInfo.name}${isLate ? ' (late)' : ''}`);
-
-      // Skip completion checks entirely for a standup that's already completed —
-      // nothing left to auto-complete or re-summarize.
-      if (!isCompletedStandup) {
-        // 🎯 SINGLE RESPONSIBILITY: Delegate all business logic to StandupService
-        const completionResult = await standupService.checkStandupCompletion(standup._id, 'response');
-
-        if (completionResult.success) {
-          console.log(`📊 Standup completion check result:`, completionResult);
+          // React to show response received
+          await addReaction(client, channel, ts, 'white_check_mark');
         } else {
-          console.error(`❌ Standup completion check failed:`, completionResult.error);
+          // Native edit on a message we don't have a response for — ignore
+          return;
         }
-      }
 
-      } finally {
-        processingLocks.delete(lockKey);
-      }
+        console.log(`Standup response ${responseAction} from ${userInfo.name}${isLate ? ' (late)' : ''}`);
+
+        // Skip completion checks entirely for a standup that's already completed —
+        // nothing left to auto-complete or re-summarize.
+        if (!isCompletedStandup) {
+          // 🎯 SINGLE RESPONSIBILITY: Delegate all business logic to StandupService
+          const completionResult = await standupService.checkStandupCompletion(standup._id, 'response');
+
+          if (completionResult.success) {
+            console.log(`📊 Standup completion check result:`, completionResult);
+          } else {
+            console.error(`❌ Standup completion check failed:`, completionResult.error);
+          }
+        }
+
+      });
 
     } catch (error) {
       console.error('Error handling message event:', error);
@@ -308,4 +344,4 @@ For more help, visit our documentation!`
 
 // The subtype gate and text resolution are exported for unit tests; the app
 // itself only needs register.
-module.exports = { register, shouldProcessSubtype, describeAttachments, resolveResponseText, ALLOWED_SUBTYPES };
+module.exports = { register, shouldProcessSubtype, describeAttachments, resolveResponseText, withStandupLock, addReaction, ALLOWED_SUBTYPES };
