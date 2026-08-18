@@ -3,6 +3,7 @@ require('./utils/logger');
 const { App } = require('@slack/bolt');
 const database = require('./config/database');
 const scheduler = require('./jobs/scheduler');
+const { isSocketModeDisconnect } = require('./utils/errorFilters');
 
 // Import handlers
 const commandHandlers = require('./handlers/commands');
@@ -24,9 +25,7 @@ app.error(async (error) => {
   console.error('❌ Slack app error:', error);
   
   // Don't crash on Socket Mode disconnects
-  if (error.message?.includes('socket-mode') || 
-      error.message?.includes('disconnect') ||
-      error.message?.includes('server explicit disconnect')) {
+  if (isSocketModeDisconnect(error)) {
     console.log('🔄 Socket Mode connection issue - will reconnect automatically');
     return;
   }
@@ -42,6 +41,15 @@ process.on('uncaughtException', (error) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
+  // Socket Mode reconnect races escape as unhandled rejections instead of
+  // reaching app.error, so they have to be tolerated here too. Exiting on them
+  // restarted the container several times a day, and every restart dropped the
+  // replies being processed at that moment.
+  if (isSocketModeDisconnect(reason)) {
+    console.warn('🔄 Socket Mode reconnect race (not fatal):', reason?.message || reason);
+    return;
+  }
+
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
   process.exit(1);
 });
