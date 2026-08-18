@@ -205,7 +205,19 @@ class Standup {
   }
 
   // Statistics
-  updateStats() {
+  //
+  // Callers that already know the real figures — the completion service counts
+  // the stored responses — pass them in, mirroring Channel.updateStats. This
+  // used to take no parameters, so that object was silently dropped and the
+  // numbers always came from actualParticipants instead, which is the field
+  // concurrent replies were corrupting. avgResponseTime was never stored at all.
+  updateStats(statsUpdate = null) {
+    if (statsUpdate) {
+      Object.assign(this.stats, statsUpdate);
+      this.updatedAt = new Date();
+      return;
+    }
+
     this.stats.totalResponded = this.actualParticipants.length;
     this.stats.responseRate = this.stats.totalExpected > 0 
       ? (this.stats.totalResponded / this.stats.totalExpected) * 100 
