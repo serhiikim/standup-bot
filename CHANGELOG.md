@@ -1,3 +1,11 @@
+# [1.4.0](https://github.com/serhiikim/standup-bot/compare/v1.3.1...v1.4.0) (2026-08-18)
+
+
+### Features
+
+* let a channel turn standup reminders off from the setup form ([610948e](https://github.com/serhiikim/standup-bot/commit/610948e494d507cd31e8d661a02251e6415fb78d))
+* mention [@channel](https://github.com/channel) instead of listing everyone individually ([1442580](https://github.com/serhiikim/standup-bot/commit/14425808d8d6a316800fcf6dbf77108308a6a783))
+
 ## [1.3.1](https://github.com/serhiikim/standup-bot/compare/v1.3.0...v1.3.1) (2026-08-18)
 
 
