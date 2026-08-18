@@ -96,53 +96,94 @@ async function backfillStandup(standup, slackService, args, report) {
       continue;
     }
 
-    const existing = await Response.findByStandupAndUser(standup._id, userId);
-    if (existing) {
-      report.alreadyStored++;
-      continue;
-    }
+    const usable = userReplies
+      .map(m => ({ ts: m.ts, text: resolveResponseText(m.text, m.files) }))
+      .filter(m => m.text);
 
-    // Mirror the live handler: the newest message is the answer of record, the
-    // first one is when they actually replied.
-    const first = userReplies[0];
-    const last = userReplies[userReplies.length - 1];
-    const text = resolveResponseText(last.text, last.files);
-    if (!text) {
+    if (usable.length === 0) {
       report.skippedEmpty++;
       continue;
     }
 
+    const existing = await Response.findByStandupAndUser(standup._id, userId);
+
+    // Which of the thread's messages this reply does not already account for.
+    const known = new Set((existing?.messages || []).map(m => m.ts));
+    if (existing && known.size === 0 && existing.messageTs) {
+      // Stored before messages were tracked: only the last one is represented.
+      known.add(existing.messageTs);
+    }
+    const missing = usable.filter(m => !known.has(m.ts));
+
+    if (existing && missing.length === 0) {
+      report.alreadyStored++;
+      continue;
+    }
+
+    const first = usable[0];
+    const last = usable[usable.length - 1];
     const submittedAt = new Date(Number(first.ts) * 1000);
+    const preview = missing.map(m => m.text).join(' / ');
+
     report.recovered.push({
       standupId: String(standup._id),
       channelId: standup.channelId,
       userId,
       submittedAt,
-      preview: text.length > 60 ? `${text.slice(0, 60)}…` : text
+      merged: !!existing,
+      messages: missing.length,
+      preview: preview.length > 60 ? `${preview.slice(0, 60)}…` : preview
     });
 
     if (!args.apply) continue;
 
-    const userInfo = await slackService.getUserInfo(userId).catch(() => null);
-    const response = await Response.create({
-      standupId: standup._id,
-      teamId: standup.teamId,
-      channelId: standup.channelId,
-      userId,
-      username: userInfo?.name || userId,
-      userDisplayName: userInfo?.profile?.display_name || userInfo?.real_name || userId,
-      messageTs: last.ts,
-      threadTs: standup.threadTs,
-      submittedAt,
-      isLate: !!(standup.responseDeadline && submittedAt > standup.responseDeadline)
-    });
-    response.parseRawMessage(text, standup.questions);
-    response.calculateResponseTime(standup.startedAt);
+    let response = existing;
+    if (!response) {
+      const userInfo = await slackService.getUserInfo(userId).catch(() => null);
+      response = await Response.create({
+        standupId: standup._id,
+        teamId: standup.teamId,
+        channelId: standup.channelId,
+        userId,
+        username: userInfo?.name || userId,
+        userDisplayName: userInfo?.profile?.display_name || userInfo?.real_name || userId,
+        messageTs: last.ts,
+        threadTs: standup.threadTs,
+        submittedAt,
+        isLate: !!(standup.responseDeadline && submittedAt > standup.responseDeadline)
+      });
+    }
+
+    // Replaying every message is idempotent: a timestamp already recorded is
+    // replaced rather than duplicated, so the reply ends up as the full thread.
+    for (const message of usable) {
+      response.recordMessage(message.ts, message.text);
+    }
+    response.messageTs = last.ts;
+
+    // A recovered message that predates what was stored is when this person
+    // actually answered, so the timing has to move with it.
+    if (submittedAt < response.submittedAt) {
+      response.submittedAt = submittedAt;
+      response.isLate = !!(standup.responseDeadline && submittedAt > standup.responseDeadline);
+      response.calculateResponseTime(standup.startedAt);
+    }
+    if (usable.length > 1) {
+      response.isEdited = true;
+    }
     await response.save();
 
-    await addReactionQuietly(slackService, standup.channelId, first.ts, 'white_check_mark');
-    for (const later of userReplies.slice(1)) {
-      await addReactionQuietly(slackService, standup.channelId, later.ts, 'pencil2');
+    if (existing) {
+      // The answer already carried a checkmark; mark the additions instead of
+      // stamping a second one on the same thread.
+      for (const message of missing) {
+        await addReactionQuietly(slackService, standup.channelId, message.ts, 'pencil2');
+      }
+    } else {
+      await addReactionQuietly(slackService, standup.channelId, first.ts, 'white_check_mark');
+      for (const later of usable.slice(1)) {
+        await addReactionQuietly(slackService, standup.channelId, later.ts, 'pencil2');
+      }
     }
   }
 
@@ -185,7 +226,10 @@ function printReport(report, args) {
   const mode = args.apply ? 'APPLIED' : 'DRY RUN — nothing was written';
   console.log(`\n=== Backfill report (${mode}) ===`);
   console.log(`Standups scanned:        ${report.standupsScanned}`);
-  console.log(`Responses recovered:     ${report.recovered.length}`);
+  const created = report.recovered.filter(r => !r.merged).length;
+  const merged = report.recovered.filter(r => r.merged).length;
+  console.log(`Replies recovered:       ${created}`);
+  console.log(`Replies completed:       ${merged} (messages added to an existing reply)`);
   console.log(`Already stored:          ${report.alreadyStored}`);
   console.log(`Skipped (not expected):  ${report.skippedNotExpected}`);
   console.log(`Skipped (no content):    ${report.skippedEmpty}`);
@@ -194,7 +238,8 @@ function printReport(report, args) {
   if (report.recovered.length > 0) {
     console.log('\nRecovered replies:');
     for (const r of report.recovered) {
-      console.log(`  ${r.channelId}  ${r.userId}  ${r.submittedAt.toISOString()}  ${r.preview}`);
+      const kind = r.merged ? `+${r.messages} msg` : 'new';
+      console.log(`  ${r.channelId}  ${r.userId}  ${r.submittedAt.toISOString()}  [${kind}]  ${r.preview}`);
     }
   }
 

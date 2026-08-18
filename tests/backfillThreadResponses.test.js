@@ -208,7 +208,7 @@ describe('backfill: recovering lost replies', () => {
     assert.strictEqual((await Response.findByStandupId(standup._id)).length, 0);
   });
 
-  test('keeps the newest message and marks a late reply as late', async () => {
+  test('keeps every message and marks a late reply as late', async () => {
     const standup = await seedStandup(['U1']);
     const late = Math.floor(Number(THREAD)) + 7 * 3600; // past the six-hour deadline
     const slack = fakeSlack([
@@ -220,7 +220,9 @@ describe('backfill: recovering lost replies', () => {
     await backfillStandup(standup, slack, { apply: true }, emptyReport());
 
     const stored = await Response.findByStandupAndUser(standup._id, 'U1');
-    assert.strictEqual(stored.rawMessage, 'corrected update');
+    assert.strictEqual(stored.rawMessage, 'first attempt\n\ncorrected update',
+      'both messages are kept, oldest first');
+    assert.strictEqual(stored.messages.length, 2);
     assert.strictEqual(stored.isLate, true);
     assert.strictEqual(slack.reactions.filter(r => r.name === 'white_check_mark').length, 1);
     assert.strictEqual(slack.reactions.filter(r => r.name === 'pencil2').length, 1);
