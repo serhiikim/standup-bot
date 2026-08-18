@@ -208,4 +208,47 @@ describe('concurrent standup replies', () => {
     const reloaded = await Standup.findById(standup._id.toString());
     assert.deepStrictEqual(reloaded.actualParticipants, ['U1']);
   });
+
+  test('the production case: text plus screenshots, with no team on the payload', async () => {
+    // Exactly what was posted to daily-drops and never recorded: a reply with a
+    // caption and three attachments. Slack omits `team` on messages carrying
+    // files, and the subtype is file_share — the two gates that dropped it.
+    const standup = await seedStandup(['U0LV2NYSU']);
+
+    await messageHandler({
+      event: {
+        channel: 'C1',
+        user: 'U0LV2NYSU',
+        ts: '1700000001.0003',
+        thread_ts: '1700000000.0001',
+        subtype: 'file_share',
+        text: 'Shipped the new onboarding flow — before and after',
+        files: [{ title: 'before.png' }, { title: 'after.png' }, { title: 'demo.mp4' }]
+        // note: no `team` key at all
+      },
+      client: {
+        reactions: {
+          add: async ({ name, timestamp }) => { reactions.push({ name, timestamp }); }
+        }
+      },
+      context: { teamId: 'T1' }
+    });
+
+    const stored = await Response.findByStandupAndUser(standup._id, 'U0LV2NYSU');
+    assert.ok(stored, 'the reply must be recorded');
+    assert.strictEqual(
+      stored.rawMessage,
+      'Shipped the new onboarding flow — before and after',
+      'the caption is kept, not replaced by a file description'
+    );
+
+    const reloaded = await Standup.findById(standup._id.toString());
+    assert.deepStrictEqual(reloaded.actualParticipants, ['U0LV2NYSU']);
+    assert.strictEqual(reloaded.stats.totalResponded, 1);
+
+    assert.strictEqual(
+      reactions.filter(r => r.name === 'white_check_mark').length, 1,
+      'and the author finally gets a checkmark'
+    );
+  });
 });
