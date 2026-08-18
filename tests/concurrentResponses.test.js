@@ -139,7 +139,9 @@ describe('concurrent standup replies', () => {
 
     const stored = await Response.findByStandupAndUser(standup._id, 'U1');
     assert.ok(stored, 'the response must exist');
-    assert.strictEqual(stored.rawMessage, 'second half of my update', 'the later message wins');
+    assert.strictEqual(stored.messages.length, 2, 'both halves are kept');
+    assert.ok(stored.rawMessage.includes('first half of my update'), 'the first half survives');
+    assert.ok(stored.rawMessage.includes('second half of my update'), 'the second half is added');
     assert.strictEqual(stored.isEdited, true, 'the follow-up was applied as an edit');
 
     const reloaded = await Standup.findById(standup._id.toString());
@@ -304,8 +306,8 @@ describe('concurrent standup replies', () => {
     const afterSecond = await Response.findByStandupAndUser(standup._id, 'U0LV2NYSU');
     assert.strictEqual(
       afterSecond.rawMessage,
-      'Adding context: this replaces the old three-step signup',
-      'the follow-up updates the same response, as it always did'
+      'Here is the new onboarding flow\n\nAdding context: this replaces the old three-step signup',
+      'the follow-up extends the reply instead of replacing the photo message'
     );
     assert.strictEqual(afterSecond.isEdited, true, 'recorded as an edit, not a second response');
     assert.strictEqual(reactions.filter(r => r.name === 'pencil2').length, 1,

@@ -158,8 +158,9 @@ function register(app) {
         let responseAction = '';
 
         if (existingResponse) {
-          // Update existing response
-          existingResponse.parseRawMessage(responseText, standup.questions);
+          // Add this message to the reply rather than replacing it. Someone who
+          // posts their update across two messages used to keep only the last.
+          existingResponse.recordMessage(ts, responseText);
           existingResponse.messageTs = ts;
           existingResponse.isLate = isLate;
           existingResponse.markAsEdited();
@@ -187,7 +188,7 @@ function register(app) {
           };
 
           const response = await Response.create(responseData);
-          response.parseRawMessage(responseText, standup.questions);
+          response.recordMessage(ts, responseText);
           response.calculateResponseTime(standup.startedAt);
           await response.save();
 

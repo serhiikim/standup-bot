@@ -13,7 +13,11 @@ class Response {
     
     // Response content
     this.responses = data.responses || []; // Array of answers corresponding to questions
-    this.rawMessage = data.rawMessage || ''; // Original message text
+    this.rawMessage = data.rawMessage || ''; // Full reply text, all messages joined
+    // Every message this person posted in the thread, oldest first, as
+    // { ts, text, editedAt }. People routinely split a standup across messages,
+    // and each one used to overwrite the last.
+    this.messages = data.messages || [];
     this.messageTs = data.messageTs; // Timestamp of response message
     this.threadTs = data.threadTs; // Thread timestamp
     
@@ -150,10 +154,35 @@ class Response {
     this.updatedAt = new Date();
   }
 
+  // Records one message from the thread. A message the person had not posted
+  // before is added to their reply; re-recording the same timestamp replaces
+  // that message, which is what a native Slack edit means.
+  recordMessage(ts, text) {
+    if (this.messages.length === 0 && this.rawMessage) {
+      // A reply stored before messages were tracked. Keep its text rather than
+      // letting the next message look like the whole answer.
+      this.messages.push({ ts: this.messageTs || ts, text: this.rawMessage });
+    }
+
+    const existing = this.messages.find(m => m.ts === ts);
+    if (existing) {
+      existing.text = text;
+      existing.editedAt = new Date();
+    } else {
+      this.messages.push({ ts, text });
+      this.messages.sort((a, b) => Number(a.ts) - Number(b.ts));
+    }
+
+    this.rawMessage = this.messages.map(m => m.text).join('\n\n');
+    // The LLM maps questions to answers itself, so the whole reply goes across
+    // as one block.
+    this.responses = [this.rawMessage];
+    this.checkCompletion();
+    this.updatedAt = new Date();
+  }
+
   parseRawMessage(message, questions) {
     this.rawMessage = message;
-    // Store the full message as a single response — the LLM handles
-    // question-to-answer mapping when generating the standup summary.
     this.responses = [message];
     this.checkCompletion();
     this.updatedAt = new Date();
@@ -213,6 +242,7 @@ class Response {
       userDisplayName: this.userDisplayName,
       responses: this.responses,
       rawMessage: this.rawMessage,
+      messages: this.messages,
       messageTs: this.messageTs,
       threadTs: this.threadTs,
       isComplete: this.isComplete,
