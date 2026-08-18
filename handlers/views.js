@@ -93,7 +93,8 @@ function register(app) {
         `• Deadline: ${formatTimeAmPm(formData.deadlineTime)} (${formData.timezone})\n` +
         `• Days: ${formData.daysText}\n` +
         `• ${formData.freeformPrompt ? 'Format: single free-form prompt' : `Questions: ${formData.questions.length}`}\n` +
-        `• Participants: ${formData.participants.length > 0 ? `${formData.participants.length} specific users` : 'All channel members'}`
+        `• Participants: ${formData.participants.length > 0 ? `${formData.participants.length} specific users` : 'All channel members'}\n` +
+        `• Reminders: ${formData.enableReminders === false ? 'off' : 'on'}`
       );
   
       // Post confirmation in channel, visible only to the user who made the change
@@ -103,7 +104,8 @@ function register(app) {
           `🕒 Standups will run at *${formatTimeAmPm(formData.time)}* (${formData.timezone}) on *${formData.daysText}*\n` +
           `⏰ Deadline: *${formatTimeAmPm(formData.deadlineTime)}* (${formData.timezone})\n` +
           `❓ ${formData.freeformPrompt ? 'Single free-form prompt configured' : `${formData.questions.length} questions configured`}\n` +
-          `👥 ${formData.participants.length > 0 ? `${formData.participants.length} specific participants` : 'All channel members can participate'}`
+          `👥 ${formData.participants.length > 0 ? `${formData.participants.length} specific participants` : 'All channel members can participate'}` +
+          `${formData.enableReminders === false ? '\n🔕 Reminders are off' : ''}`
         );
       } catch (channelError) {
         // If bot can't post to channel, just skip this step
@@ -201,6 +203,8 @@ function validateSetupForm(values) {
     // Extract questions
     const questionsValue = values[BLOCK_IDS.QUESTIONS_INPUT][BLOCK_IDS.QUESTIONS_INPUT].value;
     const freeformPrompt = isFreeformSelected(values);
+    // The box asks whether to mute; the stored flag says whether to send.
+    const enableReminders = !isChecked(values, BLOCK_IDS.REMINDERS_TOGGLE);
     const questions = freeformPrompt
       ? [questionsValue.trim()]
       : questionsValue.split('\n')
@@ -232,6 +236,7 @@ function validateSetupForm(values) {
     return {
       questions,
       freeformPrompt,
+      enableReminders,
       time,
       deadlineTime,
       days,
@@ -241,11 +246,15 @@ function validateSetupForm(values) {
     };
   }
 
-  // The checkbox block is optional, so an unchecked box arrives as an absent
+  // Checkbox blocks are optional, so an unticked box arrives as an absent
   // block, an absent action, or an empty selected_options array.
-  function isFreeformSelected(values) {
-    const selected = values[BLOCK_IDS.FREEFORM_TOGGLE]?.[BLOCK_IDS.FREEFORM_TOGGLE]?.selected_options;
+  function isChecked(values, blockId) {
+    const selected = values[blockId]?.[blockId]?.selected_options;
     return Array.isArray(selected) && selected.length > 0;
+  }
+
+  function isFreeformSelected(values) {
+    return isChecked(values, BLOCK_IDS.FREEFORM_TOGGLE);
   }
 
   async function saveChannelConfiguration(teamId, channelId, userId, channelInfo, formData) {
@@ -295,7 +304,7 @@ function validateSetupForm(values) {
         timezone: formData.timezone,
         participants: formData.participants,
         responseTimeout: responseTimeout,
-        enableReminders: true,
+        enableReminders: formData.enableReminders !== false,
         reminderInterval: 60 * 60 * 1000, // 1 hour
         requireAllResponses: false,
         autoSummary: true

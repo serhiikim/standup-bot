@@ -9,7 +9,12 @@ class StandupMessageBuilderService {
   }
 
   createStandupMessage(standup, participants, channel, statusFilter = null) {
-    const participantMentions = participants.map(p => this.slackService.formatUserMention(p.id)).join(' ');
+    // A channel configured for everyone gets one @channel rather than a wall of
+    // individual mentions; a channel with a named list still names those people.
+    const targetsWholeChannel = !channel?.config?.participants?.length;
+    const participantMentions = targetsWholeChannel
+      ? '<!channel>'
+      : participants.map(p => this.slackService.formatUserMention(p.id)).join(' ');
     
     const isFreeform = !!standup.freeformPrompt;
 

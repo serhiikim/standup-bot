@@ -83,6 +83,7 @@ const DEFAULT_STANDUP_QUESTIONS = [
     SETUP_MODAL: 'standup_setup_modal',
     QUESTIONS_INPUT: 'questions_input',
     FREEFORM_TOGGLE: 'freeform_prompt_toggle',
+    REMINDERS_TOGGLE: 'reminders_toggle',
     TIME_SELECT: 'time_select',
     DEADLINE_TIME_SELECT: 'deadline_time_select',
     DAYS_SELECT: 'days_select',
