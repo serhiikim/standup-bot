@@ -1,3 +1,11 @@
+## [1.3.1](https://github.com/serhiikim/standup-bot/compare/v1.3.0...v1.3.1) (2026-08-18)
+
+
+### Bug Fixes
+
+* keep every message a person posts instead of only the last ([5ba99aa](https://github.com/serhiikim/standup-bot/commit/5ba99aa2e12f71b3f6e40359f88e5b6bffd3c737))
+* let the backfill complete a reply, not just create missing ones ([2a92989](https://github.com/serhiikim/standup-bot/commit/2a92989c17cf919cb58f7e5494ae6e96e110f422))
+
 # [1.3.0](https://github.com/serhiikim/standup-bot/compare/v1.2.0...v1.3.0) (2026-08-18)
 
 
