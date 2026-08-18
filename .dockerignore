@@ -8,6 +8,9 @@ logs/
 *.log
 *.md
 scripts/
+# Maintenance scripts still need to run where the database lives, so this one
+# is re-included; the shell helpers around it are for the host only.
+!scripts/backfill-thread-responses.js
 .DS_Store
 **/.DS_Store
 .dockerignore
