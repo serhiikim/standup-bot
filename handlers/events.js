@@ -11,6 +11,41 @@ let standupService;
 // In-memory lock to prevent concurrent processing of messages from the same user
 const processingLocks = new Set();
 
+// Message subtypes that still carry a genuine standup reply:
+//  - file_share: a reply with an uploaded screenshot/video. The typed text and
+//    the attachment arrive as ONE message, so dropping it loses the text too.
+//  - thread_broadcast: a thread reply the author also sent to the channel.
+// Everything else stays out. A whitelist fails closed, so a subtype Slack adds
+// later is ignored rather than silently flowing into standup responses.
+const ALLOWED_SUBTYPES = new Set(['file_share', 'thread_broadcast']);
+
+function shouldProcessSubtype(subtype, isNativeEdit) {
+  if (!subtype) return true;
+  if (isNativeEdit) return true;
+  return ALLOWED_SUBTYPES.has(subtype);
+}
+
+// A file-only reply has empty text. Recording it as-is would mark the user as
+// having responded while contributing nothing to the summary, so stand in a
+// short description of what they shared.
+function describeAttachments(files) {
+  if (!Array.isArray(files) || files.length === 0) {
+    return '';
+  }
+  const label = files.length === 1 ? '1 file' : `${files.length} files`;
+  const names = files.map(f => f?.title || f?.name).filter(Boolean);
+  return names.length > 0
+    ? `[shared ${label}: ${names.join(', ')}]`
+    : `[shared ${label}]`;
+}
+
+// The text to record for a message, falling back to an attachment description.
+// Returns an empty string when there is nothing worth recording.
+function resolveResponseText(text, files) {
+  const hasText = typeof text === 'string' && text.trim().length > 0;
+  return hasText ? text : describeAttachments(files);
+}
+
 function register(app) {
   slackService = new SlackService(app);
   standupService = new StandupService(app);
@@ -20,7 +55,7 @@ function register(app) {
       // Allow message_changed subtype for native Slack edits
       const isNativeEdit = event.subtype === 'message_changed';
 
-      if (event.subtype && !isNativeEdit) {
+      if (!shouldProcessSubtype(event.subtype, isNativeEdit)) {
         return;
       }
 
@@ -40,6 +75,13 @@ function register(app) {
       const { user, text, ts, thread_ts } = messageData;
       const team = event.team || messageData.team;
       const channel = event.channel;
+
+      // Uploads arrive with the typed text and the files in one message; a
+      // file-only reply has no text at all.
+      const responseText = resolveResponseText(text, messageData.files);
+      if (!responseText) {
+        return; // Nothing worth recording
+      }
 
       // Check if this is a response to an active (or just-completed) standup
       const standup = await Standup.findByThreadTs(team, thread_ts);
@@ -75,7 +117,7 @@ function register(app) {
 
       if (existingResponse) {
         // Update existing response
-        existingResponse.parseRawMessage(text, standup.questions);
+        existingResponse.parseRawMessage(responseText, standup.questions);
         existingResponse.messageTs = ts;
         existingResponse.isLate = isLate;
         existingResponse.markAsEdited();
@@ -107,7 +149,7 @@ function register(app) {
         };
 
         const response = await Response.create(responseData);
-        response.parseRawMessage(text, standup.questions);
+        response.parseRawMessage(responseText, standup.questions);
         response.calculateResponseTime(standup.startedAt);
         await response.save();
 
@@ -264,4 +306,6 @@ For more help, visit our documentation!`
   console.log('✅ Event handlers registered');
 }
 
-module.exports = { register };
+// The subtype gate and text resolution are exported for unit tests; the app
+// itself only needs register.
+module.exports = { register, shouldProcessSubtype, describeAttachments, resolveResponseText, ALLOWED_SUBTYPES };
