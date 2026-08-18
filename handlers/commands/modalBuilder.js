@@ -18,6 +18,14 @@ const FREEFORM_TOGGLE_OPTION = {
   value: 'freeform'
 };
 
+const MUTE_REMINDERS_OPTION = {
+  text: {
+    type: 'plain_text',
+    text: 'Do not send reminders'
+  },
+  value: 'mute_reminders'
+};
+
 function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
   const isUpdate = !!existingChannel;
   const config = existingChannel?.config || {};
@@ -134,6 +142,30 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
         hint: {
           type: 'plain_text',
           text: 'Use this for a single open-ended ask (e.g. "share a screenshot of what you are working on"). The text above is kept as-is, line breaks and all, instead of being split into numbered questions.'
+        }
+      },
+
+      // Reminder toggle
+      {
+        type: 'input',
+        block_id: BLOCK_IDS.REMINDERS_TOGGLE,
+        optional: true,
+        label: {
+          type: 'plain_text',
+          text: 'Reminders'
+        },
+        element: {
+          type: 'checkboxes',
+          action_id: BLOCK_IDS.REMINDERS_TOGGLE,
+          options: [MUTE_REMINDERS_OPTION],
+          // Stored as enableReminders, so the box reflects the absence of it.
+          ...(existingChannel && config.enableReminders === false
+            ? { initial_options: [MUTE_REMINDERS_OPTION] }
+            : {})
+        },
+        hint: {
+          type: 'plain_text',
+          text: 'By default anyone who has not answered gets a DM every hour, and every 30 minutes in the final hour, until the deadline. Tick this to send none.'
         }
       },
 
