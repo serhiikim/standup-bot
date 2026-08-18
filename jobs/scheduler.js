@@ -173,10 +173,15 @@ class Scheduler {
 
       // Check if any standup was started on the same calendar day in the channel's timezone
       for (const standup of standups) {
+        // These are raw documents, not Standup instances, so startedAt arrives
+        // as an ISO string from SQLite. Intl.DateTimeFormat.format() does not
+        // parse strings and threw RangeError on every single row, which the
+        // catch below turned into "no standup today" — the duplicate guard was
+        // dead from the moment SQLite was introduced.
         const standupDateStr = new Intl.DateTimeFormat('en-CA', {
           timeZone: channelTimezone,
           year: 'numeric', month: '2-digit', day: '2-digit'
-        }).format(standup.startedAt);
+        }).format(new Date(standup.startedAt));
         
         if (standupDateStr === todayStr) {
           return true;
@@ -186,8 +191,11 @@ class Scheduler {
       return false;
 
     } catch (error) {
-      console.error('Error checking today standups:', error);
-      return false;
+      // Fail safe: claiming a standup already ran skips today's post, which is
+      // recoverable by hand. Claiming it did not run posts a duplicate to the
+      // whole channel, which is not.
+      console.error('Error checking today standups, assuming one already ran:', error);
+      return true;
     }
   }
 
