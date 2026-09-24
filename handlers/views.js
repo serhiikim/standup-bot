@@ -94,6 +94,7 @@ function register(app) {
         `• Days: ${formData.daysText}\n` +
         `• ${formData.freeformPrompt ? 'Format: single free-form prompt' : `Questions: ${formData.questions.length}`}\n` +
         `• Participants: ${formData.participants.length > 0 ? `${formData.participants.length} specific users` : 'All channel members'}\n` +
+        `${formData.ccUsers.length > 0 ? `• CC: ${formData.ccUsers.map(id => slackService.formatUserMention(id)).join(' ')}\n` : ''}` +
         `• Reminders: ${formData.enableReminders === false ? 'off' : 'on'}`
       );
   
@@ -232,6 +233,9 @@ function validateSetupForm(values) {
     // Extract participants (optional)
     const participantsData = values[BLOCK_IDS.PARTICIPANTS_SELECT]?.[BLOCK_IDS.PARTICIPANTS_SELECT];
     const participants = participantsData?.selected_users || [];
+
+    // Extract CC (optional)
+    const ccUsers = values[BLOCK_IDS.CC_SELECT]?.[BLOCK_IDS.CC_SELECT]?.selected_users || [];
   
     return {
       questions,
@@ -242,7 +246,8 @@ function validateSetupForm(values) {
       days,
       daysText,
       timezone,
-      participants
+      participants,
+      ccUsers
     };
   }
 
@@ -303,6 +308,7 @@ function validateSetupForm(values) {
         days: formData.days,
         timezone: formData.timezone,
         participants: formData.participants,
+        ccUsers: formData.ccUsers,
         responseTimeout: responseTimeout,
         enableReminders: formData.enableReminders !== false,
         reminderInterval: 60 * 60 * 1000, // 1 hour

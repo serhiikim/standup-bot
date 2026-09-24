@@ -134,6 +134,7 @@ That's it! 🎉
    - Choose time and days
    - Select timezone
    - Optionally specify participants
+   - Optionally CC people to mention on the standup post (they are not asked to respond)
 
 ### Commands
 

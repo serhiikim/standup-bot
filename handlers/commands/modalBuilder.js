@@ -328,6 +328,30 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
           type: 'plain_text',
           text: 'Leave empty to include all channel members automatically.'
         }
+      },
+
+      // CC selection
+      {
+        type: 'input',
+        block_id: BLOCK_IDS.CC_SELECT,
+        label: {
+          type: 'plain_text',
+          text: 'CC'
+        },
+        element: {
+          type: 'multi_users_select',
+          action_id: BLOCK_IDS.CC_SELECT,
+          placeholder: {
+            type: 'plain_text',
+            text: 'Select users to mention on the standup post'
+          },
+          initial_users: config.ccUsers || []
+        },
+        optional: true,
+        hint: {
+          type: 'plain_text',
+          text: 'Mentioned on the standup post so they see it. They are not asked to respond.'
+        }
       }
     ]
   };

@@ -89,6 +89,7 @@ const DEFAULT_STANDUP_QUESTIONS = [
     DEADLINE_TIME_SELECT: 'deadline_time_select',
     DAYS_SELECT: 'days_select',
     PARTICIPANTS_SELECT: 'participants_select',
+    CC_SELECT: 'cc_select',
     TIMEZONE_SELECT: 'timezone_select',
     START_BUTTON: 'start_standup_button',
     CANCEL_BUTTON: 'cancel_standup_button',

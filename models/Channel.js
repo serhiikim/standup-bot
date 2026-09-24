@@ -27,6 +27,7 @@ class Channel {
       days: [...DEFAULT_STANDUP_DAYS],
       timezone: DEFAULT_TIMEZONE,
       participants: [], // Array of user IDs, empty = all channel members
+      ccUsers: [], // User IDs mentioned under the standup post, outside the participant list
       responseTimeout: DEFAULT_RESPONSE_TIMEOUT,
       enableReminders: true,
       reminderInterval: 60 * 60 * 1000, // 1 hour in milliseconds

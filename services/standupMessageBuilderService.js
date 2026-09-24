@@ -106,6 +106,14 @@ class StandupMessageBuilderService {
       });
     }
 
+    let footer = isFreeform
+      ? '💡 *Tip:* Reply to this message in the thread. You can edit your response anytime before the deadline.'
+      : '💡 *Tip:* Reply to this message with your answers. You can edit your response anytime before the deadline.';
+    const ccUsers = channel?.config?.ccUsers || [];
+    if (ccUsers.length > 0) {
+      footer += `\nCC: ${ccUsers.map(id => this.slackService.formatUserMention(id)).join(' ')}`;
+    }
+
     blocks.push(
       { type: 'divider' },
       {
@@ -113,9 +121,7 @@ class StandupMessageBuilderService {
         elements: [
           {
             type: 'mrkdwn',
-            text: isFreeform
-              ? '💡 *Tip:* Reply to this message in the thread. You can edit your response anytime before the deadline.'
-              : '💡 *Tip:* Reply to this message with your answers. You can edit your response anytime before the deadline.'
+            text: footer
           }
         ]
       }
