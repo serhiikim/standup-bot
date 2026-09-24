@@ -1,11 +1,23 @@
 const Channel = require('../models/Channel');
 const Standup = require('../models/Standup');
 const SlackService = require('./slackService');
+const { REMINDER_LEAD_TIME } = require('../utils/constants');
 
 class StandupReminderService {
   constructor(app, slackService) {
     this.app = app;
     this.slackService = slackService || new SlackService(app);
+  }
+
+  /**
+   * The one scheduled reminder goes out REMINDER_LEAD_TIME before the deadline.
+   * Returns null when that moment has already passed — a window shorter than
+   * the lead time gets no reminder rather than one fired at the standup post.
+   */
+  static reminderTimeFor(responseDeadline, now = new Date()) {
+    if (!responseDeadline) return null;
+    const reminderAt = new Date(new Date(responseDeadline).getTime() - REMINDER_LEAD_TIME);
+    return reminderAt > now ? reminderAt : null;
   }
 
   generateReminderText(responseDeadline, includePrefix = true) {
@@ -46,25 +58,17 @@ class StandupReminderService {
         return false;
       }
 
+      // There is only one scheduled reminder, so a due one is spent here — and
+      // saved before the DMs go out, so a reminders tick that starts while a
+      // long send is still running does not pick the standup up again. A manual
+      // /standup-remind ahead of it leaves the schedule untouched.
+      if (standup.needsReminder()) {
+        standup.clearReminders();
+        await standup.save();
+      }
+
     //  await this.sendChannelReminders(standup, missingParticipants);
       await this.sendDMReminders(standup, missingParticipants);
-
-      const channel = await Channel.findByChannelId(standup.teamId, standup.channelId);
-      const timeLeft = standup.responseDeadline - new Date();
-      if (channel.config.enableReminders && timeLeft > 0) {
-        // Use 30-minute interval when less than 1 hour remains, otherwise use default
-        const ONE_HOUR = 60 * 60 * 1000;
-        const THIRTY_MINUTES = 30 * 60 * 1000;
-        const interval = timeLeft <= ONE_HOUR ? THIRTY_MINUTES : channel.config.reminderInterval;
-        const nextReminderTime = new Date(Date.now() + interval);
-        if (nextReminderTime < standup.responseDeadline) {
-          standup.setNextReminder(nextReminderTime);
-        } else {
-          standup.clearReminders();
-        }
-      } else {
-        standup.clearReminders();
-      }
       await standup.save();
 
       return true;
@@ -147,6 +151,14 @@ class StandupReminderService {
     try {
       const standups = await Standup.findNeedingReminders();
       for (const standup of standups) {
+        // Reminders can be turned off after one was scheduled; check at send
+        // time so the switch takes effect for a standup already running.
+        const channel = await Channel.findByChannelId(standup.teamId, standup.channelId);
+        if (!channel?.config?.enableReminders) {
+          standup.clearReminders();
+          await standup.save();
+          continue;
+        }
         console.log(`Sending reminder for standup: ${standup._id}`);
         await this.sendReminders(standup._id);
       }

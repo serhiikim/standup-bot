@@ -72,12 +72,16 @@ function initializeHandlers() {
 }
 
 /**
- * Automatically update any active standup reminders on startup to align with 
- * the new Deadline - 3 Hours schedule.
+ * Re-derive the scheduled reminder of every active standup on startup, so
+ * standups started under an older schedule (or before reminders were turned
+ * off) follow the current rule: one reminder, REMINDER_LEAD_TIME before the
+ * deadline, and none at all for a channel with reminders off.
  */
 async function updateActiveStandupReminders() {
   try {
     const Standup = require('./models/Standup');
+    const Channel = require('./models/Channel');
+    const StandupReminderService = require('./services/standupReminderService');
     const { STANDUP_STATUS } = require('./utils/constants');
     
     const activeStandups = await Standup.getCollection().find({
@@ -88,37 +92,27 @@ async function updateActiveStandupReminders() {
       return;
     }
     
-    console.log(`🔍 Startup: Found ${activeStandups.length} active standup(s) to align with new reminder schedule`);
+    console.log(`🔍 Startup: Found ${activeStandups.length} active standup(s) to align with the reminder schedule`);
     
     for (const data of activeStandups) {
       const standup = new Standup(data);
-      if (standup.responseDeadline) {
-        const threeHoursBeforeDeadline = new Date(standup.responseDeadline.getTime() - 3 * 60 * 60 * 1000);
-        const twoHoursBeforeDeadline = new Date(standup.responseDeadline.getTime() - 2 * 60 * 60 * 1000);
-        const oneHourBeforeDeadline = new Date(standup.responseDeadline.getTime() - 1 * 60 * 60 * 1000);
-        
-        if (threeHoursBeforeDeadline > new Date()) {
-          // Case 1: 3 hours before deadline is still in the future
-          standup.setNextReminder(threeHoursBeforeDeadline);
-          await standup.save();
-          console.log(`✅ Startup: Standup ${standup._id} next reminder set to 3h before deadline (${threeHoursBeforeDeadline.toISOString()})`);
-        } else if (twoHoursBeforeDeadline > new Date()) {
-          // Case 2: 3 hours passed, check 2 hours before deadline
-          standup.setNextReminder(twoHoursBeforeDeadline);
-          await standup.save();
-          console.log(`✅ Startup: Standup ${standup._id} next reminder set to 2h before deadline (${twoHoursBeforeDeadline.toISOString()})`);
-        } else if (oneHourBeforeDeadline > new Date()) {
-          // Case 3: 2 hours passed, check 1 hour before deadline
-          standup.setNextReminder(oneHourBeforeDeadline);
-          await standup.save();
-          console.log(`✅ Startup: Standup ${standup._id} next reminder set to 1h before deadline (${oneHourBeforeDeadline.toISOString()})`);
-        } else {
-          // Case 4: Already less than 1 hour before deadline, clear reminders
-          standup.clearReminders();
-          await standup.save();
-          console.log(`🔕 Startup: Cleared reminders for standup ${standup._id} (deadline is very close/passed)`);
-        }
+      const channel = await Channel.findByChannelId(standup.teamId, standup.channelId);
+      if (channel?.config?.enableReminders && standup.needsReminder()) {
+        // Already due — a restart inside the reminders tick window must not
+        // swallow it; the next tick sends it.
+        continue;
       }
+      const reminderTime = channel?.config?.enableReminders
+        ? StandupReminderService.reminderTimeFor(standup.responseDeadline)
+        : null;
+
+      if (reminderTime) {
+        standup.setNextReminder(reminderTime);
+        console.log(`✅ Startup: Standup ${standup._id} reminder set to ${reminderTime.toISOString()}`);
+      } else {
+        standup.clearReminders();
+      }
+      await standup.save();
     }
   } catch (error) {
     console.error('❌ Startup: Error aligning active standup reminders:', error);

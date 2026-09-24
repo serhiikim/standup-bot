@@ -121,3 +121,46 @@ describe('standup message: who gets mentioned', () => {
     assert.ok(mentionLine({ config: {} }).includes('<!channel>'));
   });
 });
+
+describe('CC users', () => {
+  const builder = new StandupMessageBuilderService(null);
+
+  function footer(channel) {
+    const standup = new Standup({
+      teamId: 'T1', channelId: 'C1', questions: ['Q?'],
+      expectedParticipants: ['U1'],
+      responseDeadline: new Date('2026-08-19T18:00:00Z')
+    });
+    const { blocks } = builder.createStandupMessage(standup, [{ id: 'U1' }], channel);
+    return blocks.filter(b => b.type === 'context').pop().elements[0].text;
+  }
+
+  test('the form reads the selected CC users', () => {
+    const values = formValues();
+    values[BLOCK_IDS.CC_SELECT] = { [BLOCK_IDS.CC_SELECT]: { selected_users: ['U8', 'U9'] } };
+    assert.deepStrictEqual(extractFormData(values).ccUsers, ['U8', 'U9']);
+  });
+
+  test('an empty CC field reads as nobody', () => {
+    assert.deepStrictEqual(extractFormData(formValues()).ccUsers, []);
+  });
+
+  test('the modal pre-fills the saved CC users', () => {
+    const modal = createSetupModal({ id: 'C1', name: 'eng' },
+      { config: { questions: ['Q?'], time: '09:00', days: [1], ccUsers: ['U8'] } }, 'UTC');
+    const block = modal.blocks.find(b => b.block_id === BLOCK_IDS.CC_SELECT);
+    assert.deepStrictEqual(block.element.initial_users, ['U8']);
+  });
+
+  test('the standup post mentions them on the line after the tip', () => {
+    const text = footer({ config: { participants: [], ccUsers: ['U8', 'U9'] } });
+    const lines = text.split('\n');
+    assert.ok(lines[0].startsWith('💡 *Tip:*'));
+    assert.strictEqual(lines[1], 'CC: <@U8> <@U9>');
+  });
+
+  test('no CC line when nobody is CCed, including configs saved before the field', () => {
+    assert.ok(!footer({ config: { participants: [], ccUsers: [] } }).includes('CC:'));
+    assert.ok(!footer({ config: { participants: [] } }).includes('CC:'));
+  });
+});

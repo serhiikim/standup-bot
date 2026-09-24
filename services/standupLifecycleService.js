@@ -2,6 +2,7 @@
 const SlackService = require('./slackService');
 const LLMService = require('./llmService');
 const UserStatusService = require('./userStatusService');
+const StandupReminderService = require('./standupReminderService');
 const Channel = require('../models/Channel');
 const Standup = require('../models/Standup');
 const { STANDUP_STATUS, DEFAULT_RESPONSE_TIMEOUT } = require('../utils/constants');
@@ -115,11 +116,10 @@ class StandupLifecycleService {
         throw postError;
       }
       
-      if (channel.config.enableReminders) {
-        // First reminder starts 3 hours before the response deadline
-        const threeHoursBeforeDeadline = new Date(responseDeadline.getTime() - 3 * 60 * 60 * 1000);
-        // If 3 hours before deadline is in the past, schedule it immediately
-        const reminderTime = threeHoursBeforeDeadline > new Date() ? threeHoursBeforeDeadline : new Date();
+      const reminderTime = channel.config.enableReminders
+        ? StandupReminderService.reminderTimeFor(responseDeadline)
+        : null;
+      if (reminderTime) {
         standupInstance.setNextReminder(reminderTime);
         await standupInstance.save();
       }

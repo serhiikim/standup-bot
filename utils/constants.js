@@ -10,6 +10,7 @@ const DEFAULT_STANDUP_QUESTIONS = [
   const DEFAULT_STANDUP_TIME = "09:00";
   const DEFAULT_DEADLINE_TIME = "18:00";
   const DEFAULT_RESPONSE_TIMEOUT = 3 * 60 * 60 * 1000; // 3 hours in milliseconds
+  const REMINDER_LEAD_TIME = 30 * 60 * 1000; // single reminder, 30 minutes before the deadline
   const DEFAULT_TIMEZONE = "UTC";
   
   // Weekdays mapping
@@ -88,6 +89,7 @@ const DEFAULT_STANDUP_QUESTIONS = [
     DEADLINE_TIME_SELECT: 'deadline_time_select',
     DAYS_SELECT: 'days_select',
     PARTICIPANTS_SELECT: 'participants_select',
+    CC_SELECT: 'cc_select',
     TIMEZONE_SELECT: 'timezone_select',
     START_BUTTON: 'start_standup_button',
     CANCEL_BUTTON: 'cancel_standup_button',
@@ -136,6 +138,7 @@ const DEFAULT_STANDUP_QUESTIONS = [
     DEFAULT_STANDUP_TIME,
     DEFAULT_DEADLINE_TIME,
     DEFAULT_RESPONSE_TIMEOUT,
+    REMINDER_LEAD_TIME,
     DEFAULT_TIMEZONE,
     WEEKDAYS,
     DEFAULT_STANDUP_DAYS,

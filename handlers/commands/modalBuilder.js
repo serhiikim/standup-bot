@@ -165,7 +165,7 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
         },
         hint: {
           type: 'plain_text',
-          text: 'By default anyone who has not answered gets a DM every hour, and every 30 minutes in the final hour, until the deadline. Tick this to send none.'
+          text: 'By default anyone who has not answered gets one DM 30 minutes before the deadline. Tick this to send none.'
         }
       },
 
@@ -327,6 +327,30 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
         hint: {
           type: 'plain_text',
           text: 'Leave empty to include all channel members automatically.'
+        }
+      },
+
+      // CC selection
+      {
+        type: 'input',
+        block_id: BLOCK_IDS.CC_SELECT,
+        label: {
+          type: 'plain_text',
+          text: 'CC'
+        },
+        element: {
+          type: 'multi_users_select',
+          action_id: BLOCK_IDS.CC_SELECT,
+          placeholder: {
+            type: 'plain_text',
+            text: 'Select users to mention on the standup post'
+          },
+          initial_users: config.ccUsers || []
+        },
+        optional: true,
+        hint: {
+          type: 'plain_text',
+          text: 'Mentioned on the standup post so they see it. They are not asked to respond.'
         }
       }
     ]
