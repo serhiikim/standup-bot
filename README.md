@@ -327,7 +327,7 @@ When OpenAI API key is configured, the bot provides:
 The bot runs a scheduler that:
 - Checks for scheduled standups every minute
 - Processes expired standups every 5 minutes
-- Sends reminders every 2 minutes
+- Checks for due reminders every 2 minutes — each standup sends one DM reminder, 30 minutes before its deadline, to whoever hasn't responded (skipped when the window is shorter than that, or when the channel turned reminders off)
 - Cleans up old data daily
 
 ### OOO-Aware Operations

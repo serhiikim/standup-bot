@@ -165,7 +165,7 @@ function createSetupModal(channelInfo, existingChannel, userTimezone = 'UTC') {
         },
         hint: {
           type: 'plain_text',
-          text: 'By default anyone who has not answered gets a DM every hour, and every 30 minutes in the final hour, until the deadline. Tick this to send none.'
+          text: 'By default anyone who has not answered gets one DM 30 minutes before the deadline. Tick this to send none.'
         }
       },
 
