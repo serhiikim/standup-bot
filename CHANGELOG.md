@@ -1,3 +1,11 @@
+# [1.5.0](https://github.com/serhiikim/standup-bot/compare/v1.4.0...v1.5.0) (2026-09-24)
+
+
+### Features
+
+* let the setup form cc users on the standup post ([35c7648](https://github.com/serhiikim/standup-bot/commit/35c76481255d822821ecc42ed0c10ed81813f0ee))
+* send a single reminder 30 minutes before the deadline ([01297a2](https://github.com/serhiikim/standup-bot/commit/01297a2ea9dec5e28c47ec4c6d7cc1b57b76fcbe))
+
 # [1.4.0](https://github.com/serhiikim/standup-bot/compare/v1.3.1...v1.4.0) (2026-08-18)
 
 
